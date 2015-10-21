@@ -136,6 +136,31 @@ int and_(instruction inst, mips_cpu_h state) {
 	state->regs[inst.dst] = res;
 	return 4;
 }
+int or_(instruction inst, mips_cpu_h state) {
+    if(state->logLevel >= 1){
+		fprintf(state->logDst, "and %u, %u, %u.\n", inst.dst, inst.src1, inst.src2);
+	}
+	uint32_t va=state->regs[inst.src1];
+	uint32_t vb=state->regs[inst.src2];
+
+	uint32_t res=va|vb;
+            
+	state->regs[inst.dst] = res;
+	return 4;
+}
+
+int xor_(instruction inst, mips_cpu_h state) {
+    if(state->logLevel >= 1){
+		fprintf(state->logDst, "and %u, %u, %u.\n", inst.dst, inst.src1, inst.src2);
+	}
+	uint32_t va=state->regs[inst.src1];
+	uint32_t vb=state->regs[inst.src2];
+
+	uint32_t res=va^vb;
+            
+	state->regs[inst.dst] = res;
+	return 4;
+}
 
 
 
@@ -169,9 +194,12 @@ mips_error mips_cpu_step(
         
         if(inst.function ==  0x21){
             offset = addu(inst,state);
-            // TODO : What about updating the program counter
         } else if(inst.function ==  0x24) {
 			offset = and_(inst,state);
+		} else if(inst.function ==  0x25) {
+			offset = or_(inst,state);
+		} else if(inst.function ==  0x26) {
+			offset = xor_(inst,state);
 		} else {
             return mips_ErrorNotImplemented;
         }
@@ -179,6 +207,7 @@ mips_error mips_cpu_step(
         return mips_ErrorNotImplemented;
     }
 	
+	// TODO : What about updating the program counter
 	state->regs[0] = 0;
 	//state->pc = state->pcNext;
 	//state->pcNext += offset;
