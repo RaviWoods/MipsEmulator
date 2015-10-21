@@ -1,8 +1,8 @@
 /*! \file mips.h
     Main include file for all the simulation and test related files.
 */
-#ifndef mips_hdr_header
-#define mips_hdr_header
+#ifndef headers_and_defines_h
+#define headers_and_defines_h
 
 #include <stdlib.h>
 #include <iostream>
@@ -12,6 +12,8 @@
 #include <fstream>
 #include <stdio.h>
 #include <time.h>
-#define MAX_DATE 12
+#include "mips.h"
+using namespace std;
+
 #define DEBUG_LEVEL 1
 #endif

@@ -1,4 +1,4 @@
-#include "mips.h"
+#include "headers_and_defines.h"
 
 struct mips_cpu_impl
 {
@@ -13,6 +13,35 @@ struct mips_cpu_impl
     FILE *logDst;
 };
 
+struct instruction {
+	
+	instruction(uint32_t inst_in) {
+		whole = inst_in;
+		opcode =  (inst_in>>26) & 0x3F;
+		src1 = (inst_in>> 21 ) & 0x1F;
+		src2 = (inst_in>> 16 ) & 0x1F;   
+		dst = (inst_in>> 11 ) & 0x1F;    
+		shift = (inst_in>> 6 ) & 0x1F ;
+		function = (inst_in>> 0 ) & 0x3F;
+		if (opcode == 0) {
+			type = 1;
+		} else if (opcode == 2 || opcode == 3) {
+			type = 3;
+		} else {
+			type = 2;
+		}
+	}
+	
+	uint32_t whole;
+	uint32_t opcode;
+    uint32_t src1;
+    uint32_t src2; 
+    uint32_t dst;
+    uint32_t shift;
+    uint32_t function;
+	int type; // R = 1, I = 2, J = 3 
+};
+
 
 mips_error mips_cpu_get_register(
 	mips_cpu_h state,	//!< Valid (non-empty) handle to a CPU
@@ -20,8 +49,12 @@ mips_error mips_cpu_get_register(
 	uint32_t *value		//!< Where to write the value to
 )
 {
-    // TODO : error handling
-    *value = state->regs[index];
+    try {
+		*value = state->regs[index];
+	} catch (mips_error e) {
+		return e;
+	}
+    
     return mips_Success;
 }
 
@@ -32,8 +65,12 @@ mips_error mips_cpu_set_register(
 	uint32_t value		//!< New value to write into register file
 )
 {
-    // TODO : error handling
-    state->regs[index] = value;
+	try {
+		state->regs[index] = value;
+	} catch (mips_error e) {
+		return e;
+	}
+
     return mips_Success;
 }
 
@@ -49,6 +86,7 @@ mips_cpu_h mips_cpu_create(mips_mem_h mem)
     mips_cpu_impl *cpu=new mips_cpu_impl;
     
     cpu->pc=0;
+	cpu->pcNext = 4; 
     for(int i=0;i<32;i++){
         cpu->regs[i]=0;
     }
@@ -72,10 +110,40 @@ uint32_t to_big(const uint8_t *pData)
         (((uint32_t)pData[3])<<0);
 }
 
+
+int addu(instruction inst, mips_cpu_h state) {
+    if(state->logLevel >= 1){
+		fprintf(state->logDst, "addu %u, %u, %u.\n", inst.dst, inst.src1, inst.src2);
+	}
+	uint32_t va=state->regs[inst.src1];
+	uint32_t vb=state->regs[inst.src2];
+
+	uint32_t res=va+vb;
+            
+	state->regs[inst.dst] = res;
+	return 4;
+}
+
+int and_(instruction inst, mips_cpu_h state) {
+    if(state->logLevel >= 1){
+		fprintf(state->logDst, "and %u, %u, %u.\n", inst.dst, inst.src1, inst.src2);
+	}
+	uint32_t va=state->regs[inst.src1];
+	uint32_t vb=state->regs[inst.src2];
+
+	uint32_t res=va&vb;
+            
+	state->regs[inst.dst] = res;
+	return 4;
+}
+
+
+
 mips_error mips_cpu_step(
 	mips_cpu_h state	//! Valid (non-empty) handle to a CPU
 )
 {
+	
     uint8_t buffer[4];
     
     mips_error err=mips_mem_read(
@@ -89,40 +157,30 @@ mips_error mips_cpu_step(
         return err;
     }
     
-    uint32_t instruction= to_big(buffer);
-    
-    uint32_t opcode =  (instruction>>26) & 0x3F;
-    uint32_t src1 = (instruction>> 21 ) & 0x1F;
-    uint32_t src2 = (instruction>> 16 ) & 0x1F;   
-    uint32_t dst = (instruction>> 11 ) & 0x1F;    
-    uint32_t shift = (instruction>> 6 ) & 0x1F ;
-    uint32_t function = (instruction>> 0 ) & 0x3F ;
+    instruction inst(to_big(buffer));
+    int offset = 0;
 
-    if(opcode == 0){
-        // This is R-type
+    if(inst.type == 1){
         if(state->logLevel >= 2){
             fprintf(state->logDst, "R-Type : dst=%u, src1=%u, src2=%u, shift=%u, function=%u.\n  instr=%08x\n",
-                dst, src1, src2, shift, function, instruction
+                inst.dst, inst.src1, inst.src2, inst.shift, inst.function, inst.whole
             );
         }
         
-        if(function ==  0x21){
-            if(state->logLevel >= 1){
-                fprintf(state->logDst, "addu %u, %u, %u.\n", dst, src1, src2);
-            }
-            uint32_t va=state->regs[src1];
-            uint32_t vb=state->regs[src2];
-            
-            uint32_t res=va+vb;
-            
-            state->regs[dst] = res; // NOTE: what about zero reg?
-            
-            // NOTE : What about updating the program counter
-            return mips_Success;
-        }else{
+        if(inst.function ==  0x21){
+            offset = addu(inst,state);
+            // TODO : What about updating the program counter
+        } else if(inst.function ==  0x24) {
+			offset = and_(inst,state);
+		} else {
             return mips_ErrorNotImplemented;
         }
-    }else{
+    } else {
         return mips_ErrorNotImplemented;
     }
+	
+	state->regs[0] = 0;
+	//state->pc = state->pcNext;
+	//state->pcNext += offset;
+	return mips_Success;
 }
