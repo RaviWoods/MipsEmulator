@@ -1,5 +1,12 @@
 #include "headers_and_defines.h"
 
+map<int,int> myClass::myMap = {
+   {"addu", 0x21},
+   {"and", 0x24},
+   {"or", 0x25}
+   ("xor", 0x26)
+};
+
 int rtestsetup(string name, unsigned srca, unsigned srcb, unsigned long dst, unsigned long shift, mips_mem_h mem) {
 	 
 	int subtype;

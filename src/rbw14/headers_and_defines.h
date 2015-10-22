@@ -12,8 +12,14 @@
 #include <fstream>
 #include <stdio.h>
 #include <time.h>
+#include <map>
 #include "mips.h"
 using namespace std;
 
 #define DEBUG_LEVEL 1
+
+class inst_codes_class {
+  private:
+    static map<string,uint_32> r_functions;
+};
 #endif
