@@ -13,5 +13,5 @@
 #include "mips.h"
 using namespace std;
 
-#define DEBUG_LEVEL 3
+#define DEBUG_LEVEL 1
 #endif

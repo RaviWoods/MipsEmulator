@@ -198,10 +198,9 @@ mips_error mips_cpu_step(
     
     instruction inst(to_big(buffer));
     int offset = 0;
-	
-    if(state->logLevel >= 3){
+	if(state->logLevel >= 3){
 	fprintf(state->logDst, "Current pc = %u\n", state->pc);
-    }
+	}
     if(inst.type == 1){
         if(state->logLevel >= 2){
             fprintf(state->logDst, "R-Type : dst=%u, src1=%u, src2=%u, shift=%u, function=%u.\n  instr=%08x\n",

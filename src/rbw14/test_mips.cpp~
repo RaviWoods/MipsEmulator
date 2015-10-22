@@ -40,6 +40,7 @@ int rtestsetup(string name, unsigned srca, unsigned srcb, unsigned long dst, uns
 
     uint32_t* pc;
     mips_error e = mips_cpu_get_pc(cpu,pc);
+    cout << *pc << endl;
     e = mips_mem_write(
         mem,	        //!< Handle to target memory
 	*pc,	            //!< Byte address to start transaction at
@@ -103,7 +104,7 @@ int main()
 	subtype1(testId,name, srca, 40, srcb, 50, dst, 90, cpu);
 
 	
-    	//2nd ADDU test	
+    //2nd ADDU test	
 	
 	name = "addu";
 	srca = 4;
