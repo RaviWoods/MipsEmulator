@@ -124,18 +124,37 @@ uint32_t to_big(const uint8_t *pData)
         (((uint32_t)pData[3])<<0);
 }
 
-
-int addu(instruction inst, mips_cpu_h state) {
-    if(state->logLevel >= 1){
-		fprintf(state->logDst, "addu %u, %u, %u.\n", inst.dst, inst.src1, inst.src2);
+int subtype1(string name, instruction inst, mips_cpu_h state) {
+	if(state->logLevel >= 1){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", name.c_str(), inst.dst, inst.src1, inst.src2);
 	}
-	uint32_t va=state->regs[inst.src1];
-	uint32_t vb=state->regs[inst.src2];
+	uint32_t va = state->regs[inst.src1];
+	uint32_t vb = state->regs[inst.src2];
+	uint32_t res;
+	if (name == "addu") {
+		res=va+vb;
+		state->regs[inst.dst] = res;
+	} else if (name == "and") {
+		res=va&vb;
+		state->regs[inst.dst] = res;
+	} else if (name == "or") {
+		res=va|vb;
+		state->regs[inst.dst] = res;
+	} else if (name == "xor") {
+		res=va^vb;
+		state->regs[inst.dst] = res;
+	} else if (name == "sltu") {
+		if (vb > va) {state->regs[inst.dst] = 0x01;}
+		else {state->regs[inst.dst] = 0x00;}
+	}
 
-	uint32_t res=va+vb;
-            
-	state->regs[inst.dst] = res;
 	return 4;
+	
+}
+
+/*
+int addu(instruction inst, mips_cpu_h state) {
+
 }
 
 int and_(instruction inst, mips_cpu_h state) {
@@ -175,7 +194,7 @@ int xor_(instruction inst, mips_cpu_h state) {
 	state->regs[inst.dst] = res;
 	return 4;
 }
-
+*/
 
 
 mips_error mips_cpu_step(
@@ -210,15 +229,15 @@ mips_error mips_cpu_step(
         }
         
         if(inst.function ==  0x21){
-            offset = addu(inst,state);
+			offset = subtype1("addu",inst,state);
         } else if(inst.function ==  0x24) {
-			offset = and_(inst,state);
+			offset = subtype1("and",inst,state);
 		} else if(inst.function ==  0x25) {
-			offset = or_(inst,state);
+			offset = subtype1("or",inst,state);
 		} else if(inst.function ==  0x26) {
-			offset = xor_(inst,state);
-		} else {
-            return mips_ErrorNotImplemented;
+			offset = subtype1("xor",inst,state);
+		} else if(inst.function ==  0x28){
+            offset = subtype1("sltu",inst,state);
         }
     } else {
         return mips_ErrorNotImplemented;

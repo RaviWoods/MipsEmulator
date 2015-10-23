@@ -5,7 +5,6 @@ int rtestsetup(string name, unsigned srca, unsigned srcb, unsigned long dst, uns
 	int subtype;
     	unsigned long function;
 	
-	
 	if (name == "addu") {
 		function = 0x21;
 		subtype = 1;
@@ -17,6 +16,9 @@ int rtestsetup(string name, unsigned srca, unsigned srcb, unsigned long dst, uns
 		subtype = 1;
 	} else if (name == "xor") {
 		function = 0x26;
+		subtype = 1;
+	} else if (name == "sltu") {
+		function = 0x28;
 		subtype = 1;
 	}
     	// 1 - Setup an instruction in ram
@@ -143,6 +145,26 @@ int main()
 	testId = mips_test_begin_test(name.c_str());   
     subtype = rtestsetup(name, srca, srcb, dst, 0,  mem, cpu);
 	subtype1(testId, name, srca, 0xF0F0F0F0, srcb, 0xFF00FF00, dst, (0xF0F0F0F0 ^ 0xFF00FF00), cpu);
+	
+	//1st SLTU  test
+	
+	name = "sltu";
+	srca = 4;
+	srcb = 30;
+	dst = 31;
+	testId = mips_test_begin_test(name.c_str());   
+    subtype = rtestsetup(name, srca, srcb, dst, 0,  mem);
+	subtype1(testId, name, srca, 0xFFFFFFFF, srcb, 0xFFFFFFFE, dst, 0, cpu);
+	
+	//2nd SLTU  test
+	
+	name = "sltu";
+	srca = 3;
+	srcb = 5;
+	dst = 2;
+	testId = mips_test_begin_test(name.c_str());   
+    subtype = rtestsetup(name, srca, srcb, dst, 0,  mem);
+	subtype1(testId, name, srca, 1, srcb, 2, dst, 1, cpu);
     
 	
 	mips_test_end_suite();
