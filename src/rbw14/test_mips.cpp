@@ -1,5 +1,5 @@
 #include "headers_and_defines.h"
-
+//
 int rtestsetup(string name, unsigned srca, unsigned srcb, unsigned long dst, unsigned long shift, mips_mem_h mem, mips_cpu_h cpu) {
 	 
 	int subtype;
@@ -153,7 +153,7 @@ int main()
 	srcb = 30;
 	dst = 31;
 	testId = mips_test_begin_test(name.c_str());   
-    subtype = rtestsetup(name, srca, srcb, dst, 0,  mem);
+    subtype = rtestsetup(name, srca, srcb, dst, 0,  mem, cpu);
 	subtype1(testId, name, srca, 0xFFFFFFFF, srcb, 0xFFFFFFFE, dst, 0, cpu);
 	
 	//2nd SLTU  test
@@ -163,7 +163,6 @@ int main()
 	srcb = 5;
 	dst = 2;
 	testId = mips_test_begin_test(name.c_str());   
-    subtype = rtestsetup(name, srca, srcb, dst, 0,  mem);
 	subtype1(testId, name, srca, 1, srcb, 2, dst, 1, cpu);
     
 	
