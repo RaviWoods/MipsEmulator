@@ -18,8 +18,5 @@ using namespace std;
 
 #define DEBUG_LEVEL 1
 
-class inst_codes_class {
-  private:
-    static map<string,uint_32> r_functions;
-};
+
 #endif
