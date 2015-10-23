@@ -1,4 +1,5 @@
 #include "headers_and_defines.h"
+#include <iomanip>
 //
 struct mips_cpu_impl
 {
@@ -16,7 +17,6 @@ struct mips_cpu_impl
 
 
 struct instruction {
-	
 	instruction(uint32_t inst_in) {
 		whole = inst_in;
 		opcode =  (inst_in>>26) & 0x3F;
@@ -27,7 +27,7 @@ struct instruction {
 		function = (inst_in>> 0 ) & 0x3F;
 		ioffset = (inst_in>>0) & 0xFFFF;
 		if (opcode == 0) {
-			type = 1;
+			type = 1;	
 		} else if (opcode == 2 || opcode == 3) {
 			type = 3;
 		} else {
@@ -37,25 +37,64 @@ struct instruction {
 	
 	uint32_t whole;
 	uint32_t opcode;
-    	uint32_t src1;
-    	uint32_t src2; 
+    uint32_t src1;
+    uint32_t src2; 
    	uint32_t dst;
-    	uint32_t shift;
+    uint32_t shift;
    	uint32_t function;
 	uint32_t ioffset;
 	int type; // R = 1, I = 2, J = 3 
 };
 
-mips_error mips_cpu_get_pc(
+bool sig_to_unsig(uint16_t sig, uint16_t* unsig) {
+    
+	bool negative = false;
+	if ((sig & 0x8000) != 0) {
+		negative = true;
+		*unsig = ~sig + 1;
+	} else {
+		*unsig = sig;
+	}
+	return negative;
+
+}
+
+void mips_cpu_free(mips_cpu_h state)
+{
+	if(state != NULL)
+	{
+		if(state->logDst != NULL)
+			fclose(state->logDst);
+		free(state);
+	}
+}
+
+mips_error mips_cpu_set_pc(
 	mips_cpu_h state,	//!< Valid (non-empty) handle to a CPU
-	uint32_t *pc		//!< Where to write the byte address too
+	uint32_t pc			//!< Address of the next instruction to exectute.
 ) {
+	
 	try {
-		*pc = state->pc;
+		state->pc = pc;
 	} catch (mips_error e) {
 		return e;
 	}
     
+   	return mips_Success;
+}
+mips_error mips_cpu_get_pc(
+	mips_cpu_h state,	//!< Valid (non-empty) handle to a CPU
+	uint32_t *pc		//!< Where to write the byte address too
+) {
+	
+	*pc = state->pc;
+	try {
+		//*pc = new uint32_t;
+		*pc = state->pc;
+	} catch (mips_error e) {
+		
+		return e;
+	}
    	return mips_Success;
 }
 
@@ -65,7 +104,7 @@ mips_error mips_cpu_get_register(
 	uint32_t *value		//!< Where to write the value to
 )
 {
-    	try {
+    try {
 		*value = state->regs[index];
 	} catch (mips_error e) {
 		return e;
@@ -160,63 +199,24 @@ uint32_t subtype2(string name, instruction inst, mips_cpu_h state) {
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
+	uint32_t retval = 4;
 	if (name == "beq") {
-		if va = vb {
-			retval = ioffset >> 2;
+		if (va == vb) {
+		
+			retval = inst.ioffset << 2;
+			
 		}
 	} 
-}
-
-/*
-int addu(instruction inst, mips_cpu_h state) {
-
-}
-
-int and_(instruction inst, mips_cpu_h state) {
-    if(state->logLevel >= 1){
-		fprintf(state->logDst, "and %u, %u, %u.\n", inst.dst, inst.src1, inst.src2);
+	if(state->logLevel >= 0){
+		fprintf(state->logDst, "pc offset = %x\n", retval);
 	}
-	uint32_t va=state->regs[inst.src1];
-	uint32_t vb=state->regs[inst.src2];
-
-	uint32_t res=va&vb;
-            
-	state->regs[inst.dst] = res;
-	return 4;
+	return retval;
 }
-int or_(instruction inst, mips_cpu_h state) {
-    if(state->logLevel >= 1){
-		fprintf(state->logDst, "and %u, %u, %u.\n", inst.dst, inst.src1, inst.src2);
-	}
-	uint32_t va=state->regs[inst.src1];
-	uint32_t vb=state->regs[inst.src2];
-
-	uint32_t res=va|vb;
-            
-	state->regs[inst.dst] = res;
-	return 4;
-}
-
-int xor_(instruction inst, mips_cpu_h state) {
-    if(state->logLevel >= 1){
-		fprintf(state->logDst, "and %u, %u, %u.\n", inst.dst, inst.src1, inst.src2);
-	}
-	uint32_t va=state->regs[inst.src1];
-	uint32_t vb=state->regs[inst.src2];
-
-	uint32_t res=va^vb;
-            
-	state->regs[inst.dst] = res;
-	return 4;
-}
-*/
-
 
 mips_error mips_cpu_step(
 	mips_cpu_h state	//! Valid (non-empty) handle to a CPU
 )
 {
-	
     uint8_t buffer[4];
     
     mips_error err=mips_mem_read(
@@ -234,7 +234,8 @@ mips_error mips_cpu_step(
     int offset = 0;
 	
     if(state->logLevel >= 3) {
-	fprintf(state->logDst, "Current pc = %u\n", state->pc);
+		fprintf(state->logDst, "Current pc = %x\n", state->pc);
+		fprintf(state->logDst, "type = %i\n", inst.opcode);
     }
     if(inst.type == 1) {
         if(state->logLevel >= 2) {
@@ -243,9 +244,9 @@ mips_error mips_cpu_step(
             );
         }
         
-        	if(inst.function ==  0x21){
+        if(inst.function ==  0x21){
 			offset = subtype1("addu",inst,state);
-        	} else if(inst.function ==  0x24) {
+        } else if(inst.function ==  0x24) {
 			offset = subtype1("and",inst,state);
 		} else if(inst.function ==  0x25) {
 			offset = subtype1("or",inst,state);
@@ -253,26 +254,32 @@ mips_error mips_cpu_step(
 			offset = subtype1("xor",inst,state);
 		} else if(inst.function ==  0x28) {
             		offset = subtype1("sltu",inst,state);
-        	}
+        }
     } else if(inst.type == 2 ) {
        	if(state->logLevel >= 2) {
             fprintf(state->logDst, "I-Type: src1=%u, src2=%u, ioffset=%u", inst.src1, inst.src2, inst.ioffset );
         }
-	if(inst.function ==  0x04){
-		offset = subtype2("beq",inst, state);
-	}
+		if(inst.opcode ==  4){
+			offset = subtype2("beq",inst, state);
+		}
+		
     } else {
-
 	return mips_ErrorNotImplemented;
     }
+	//
 	
 	state->regs[0] = 0;
 	state->pc = state->pcNext;
-	if ((offset & 0x80000000) >= 1) {
-		state->pcNext -= offset;	
+	uint16_t unsig_offset;
+	bool negative = sig_to_unsig(offset,&unsig_offset); 
+	if (negative) {
+		state->pcNext -= unsig_offset;
 	} else {
-		state->pcNext += offset;
+		state->pcNext += unsig_offset;
 	}
 	
+	if(state->logLevel >= 4) {
+            fprintf(state->logDst, "pcNext = %x\n", state-> pcNext);
+    }
 	return mips_Success;
 }

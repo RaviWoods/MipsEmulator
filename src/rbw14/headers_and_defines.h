@@ -17,7 +17,9 @@
 #include "mips.h"
 using namespace std;
 
-#define DEBUG_LEVEL 4
+bool sig_to_unsig(uint16_t sig, uint16_t* unsig);
+
+#define DEBUG_LEVEL 0
 
 
 #endif

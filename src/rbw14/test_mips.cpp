@@ -42,9 +42,13 @@ int rtestsetup(string name, unsigned srca, unsigned srcb, unsigned long dst, uns
 
     uint32_t* pc;
     mips_error e = mips_cpu_get_pc(cpu,pc);
+	if(e!=mips_Success){
+		fprintf(stderr, "mips_cpu_get_pc : failed.\n");
+		exit(1);
+	} 
     e = mips_mem_write(
         mem,	        //!< Handle to target memory
-	*pc,	            //!< Byte address to start transaction at
+		*pc,	            //!< Byte address to start transaction at
         4,	            //!< Number of bytes to transfer
         buffer	        //!< Receives the target bytes
     );
@@ -53,6 +57,115 @@ int rtestsetup(string name, unsigned srca, unsigned srcb, unsigned long dst, uns
         exit(1);
     }
 	return subtype;
+}
+
+int itestsetup(string name, unsigned srca, unsigned srcb, uint16_t ioffset, mips_mem_h mem, mips_cpu_h cpu) {
+	 
+	int subtype;
+	uint32_t opcode;
+	if (name == "beq") {
+		opcode = 0x04;
+		subtype = 1;
+	} 
+    	// 1 - Setup an instruction in ram
+    	// addu r3, r4, r5
+    uint32_t instr =
+		(opcode << 26)
+		|
+        (srca << 21) // srca = r4
+        |
+        (srcb << 16) // srcb = r5
+        |
+        (ioffset << 0);
+    
+    uint8_t buffer[4];
+    buffer[0]=(instr>>24)&0xFF;
+    buffer[1]=(instr>>16)&0xFF;
+    buffer[2]=(instr>>8)&0xFF;
+    buffer[3]=(instr>>0)&0xFF;
+
+    uint32_t* pc;
+    mips_error e = mips_cpu_get_pc(cpu,pc);
+    e = mips_mem_write(
+        mem,	        //!< Handle to target memory
+		*pc,	            //!< Byte address to start transaction at
+        4,	            //!< Number of bytes to transfer
+        buffer	        //!< Receives the target bytes
+    );
+    if(e!=mips_Success){
+        fprintf(stderr, "mips_mem_write : failed.\n");
+        exit(1);
+    }
+	return subtype;
+}
+
+
+void subtype2(int testId, string name, unsigned indexa, uint32_t valuea, unsigned indexb, uint32_t valueb, uint16_t success_pc, mips_cpu_h cpu) {
+
+	mips_error e = mips_cpu_set_register(cpu, indexa, valuea);
+	e = mips_cpu_set_register(cpu, indexb, valueb);
+	
+
+	if(e!=mips_Success){
+		fprintf(stderr, "mips_cpu_get_pc : failed.\n");
+		exit(1);
+	}  
+	
+	e = mips_cpu_step(cpu);
+	if(e!=mips_Success){
+		fprintf(stderr, "mips_cpu_step : failed.\n");
+		exit(1);
+	}
+	
+	uint32_t pc1;
+	e = mips_cpu_get_pc(cpu,&pc1);
+	cout << "pc1 = " << hex << pc1 << endl;
+	if(e!=mips_Success){
+		fprintf(stderr, "mips_cpu_get_pc : failed.\n");
+		exit(1);
+	}  
+	
+	e = mips_cpu_step(cpu);
+	if(e != mips_Success){
+		fprintf(stderr, "mips_cpu_step : failed.\n");
+		exit(1);
+	}
+	
+	uint32_t pc2;
+	e = mips_cpu_get_pc(cpu,&pc2);
+	cout << "pc2 = " << hex << pc2 << endl;
+	if(e!=mips_Success){
+		fprintf(stderr, "mips_cpu_get_pc : failed.\n");
+		exit(1);
+	} 
+	
+	uint32_t got;
+	int passed = 0;
+	
+	uint16_t unsig_success_pc;
+	
+	bool negative = sig_to_unsig(success_pc,&unsig_success_pc);
+	if (negative) {
+		//Gone backwards
+		if ((pc1-pc2) == unsig_success_pc) {
+			passed = 1;
+		}
+	} else {
+		if ((pc2-pc1) == unsig_success_pc) {
+			passed = 1;
+		}
+	}
+	
+	cout << "success_pc = " << hex << success_pc << endl;
+
+    stringstream ss;
+	ss << name << "failed, with inputs " << valuea << " and  " << valueb << endl;
+	e = mips_cpu_set_pc(cpu,pc1);
+	if(e!=mips_Success){
+		fprintf(stderr, "mips_cpu_get_pc : failed.\n");
+		exit(1);
+	} 
+	mips_test_end_test(testId, passed, ss.str().c_str());
 }
 
 void subtype1(int testId, string name, unsigned indexa, uint32_t valuea, unsigned indexb, uint32_t valueb, unsigned dst, uint32_t success_value, mips_cpu_h cpu) {
@@ -156,14 +269,35 @@ int main()
     subtype = rtestsetup(name, srca, srcb, dst, 0,  mem, cpu);
 	subtype1(testId, name, srca, 0xFFFFFFFF, srcb, 0xFFFFFFFE, dst, 0, cpu);
 	
-	//2nd SLTU  test
+	//1st BEQ - Not equal
 	
-	name = "sltu";
+	name = "beq";
 	srca = 3;
 	srcb = 5;
-	dst = 2;
+	uint16_t ioffset = 0xFFFF;
 	testId = mips_test_begin_test(name.c_str());   
-	subtype1(testId, name, srca, 1, srcb, 2, dst, 1, cpu);
+	subtype = itestsetup(name, srca, srcb, ioffset, mem, cpu);
+	subtype2(testId, name, srca, 6, srcb, 5, 4, cpu);
+	
+	//2nd BEQ - equal with negative offset
+	
+	name = "beq";
+	srca = 3;
+	srcb = 5;
+	ioffset = 0xFFFF;
+	testId = mips_test_begin_test(name.c_str());   
+	subtype = itestsetup(name, srca, srcb, ioffset, mem, cpu);
+	subtype2(testId, name, srca, 6, srcb, 6, ioffset << 2, cpu);
+	
+	//3rd BEQ - equal with positive offset
+	
+	name = "beq";
+	srca = 3;
+	srcb = 5;
+	ioffset = 0x0001;
+	testId = mips_test_begin_test(name.c_str());   
+	subtype = itestsetup(name, srca, srcb, ioffset, mem, cpu);
+	subtype2(testId, name, srca, 6, srcb, 6, ioffset << 2, cpu);
     
 	
 	mips_test_end_suite();
