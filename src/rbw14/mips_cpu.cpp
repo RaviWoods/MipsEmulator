@@ -1,5 +1,17 @@
-#include "headers_and_defines.h"
-#include <iomanip>
+#include <stdlib.h>
+#include <iostream>
+#include <bitset>
+#include <string>
+#include <sstream>
+#include <fstream>
+#include <stdio.h>
+#include <time.h>
+#include <map>
+#include "mips.h"
+using namespace std;
+
+bool sig_to_unsig(uint16_t sig, uint16_t* unsig);
+
 //
 struct mips_cpu_impl {
     uint32_t pc;
