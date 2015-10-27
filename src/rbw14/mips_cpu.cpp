@@ -1,21 +1,16 @@
 #include "headers_and_defines.h"
 #include <iomanip>
 //
-struct mips_cpu_impl
-{
+struct mips_cpu_impl {
     uint32_t pc;
     uint32_t pcNext;
-    
     uint32_t regs[32];
-    
     mips_mem_h mem;
-    
     unsigned logLevel;
     FILE *logDst;
 };
 
-
-
+//
 struct instruction {
 	instruction(uint32_t inst_in) {
 		whole = inst_in;
@@ -165,49 +160,82 @@ uint32_t to_big(const uint8_t *pData)
         (((uint32_t)pData[3])<<0);
 }
 
-uint32_t subtype1(string name, instruction inst, mips_cpu_h state) {
-	if(state->logLevel >= 1){
-		fprintf(state->logDst, "%s : %u, %u, %u.\n", name.c_str(), inst.dst, inst.src1, inst.src2);
+
+uint32_t _addu(instruction inst, mips_cpu_h state) {
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.dst, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
 	uint32_t res;
-	if (name == "addu") {
-		res=va+vb;
-		state->regs[inst.dst] = res;
-	} else if (name == "and") {
-		res=va&vb;
-		state->regs[inst.dst] = res;
-	} else if (name == "or") {
-		res=va|vb;
-		state->regs[inst.dst] = res;
-	} else if (name == "xor") {
-		res=va^vb;
-		state->regs[inst.dst] = res;
-	} else if (name == "sltu") {
-		if (vb > va) {state->regs[inst.dst] = 0x01;}
-		else {state->regs[inst.dst] = 0x00;}
-	}
+	res=va+vb;
+	state->regs[inst.dst] = res;
 
 	return 4;
-	
 }
 
-uint32_t subtype2(string name, instruction inst, mips_cpu_h state) {
-	if(state->logLevel >= 1){
-		fprintf(state->logDst, "%s : %u, %u, %u.\n", name.c_str(), inst.src1, inst.src2, inst.ioffset);
+uint32_t _and(instruction inst, mips_cpu_h state) {
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.dst, inst.src1, inst.src2);
+	}
+	uint32_t va = state->regs[inst.src1];
+	uint32_t vb = state->regs[inst.src2];
+	uint32_t res;
+	res=va&vb;
+	state->regs[inst.dst] = res;
+
+	return 4;
+}
+
+uint32_t _or(instruction inst, mips_cpu_h state) {
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.dst, inst.src1, inst.src2);
+	}
+	uint32_t va = state->regs[inst.src1];
+	uint32_t vb = state->regs[inst.src2];
+	uint32_t res;
+	res=va|vb;
+	state->regs[inst.dst] = res;
+
+	return 4;
+}
+
+uint32_t _xor(instruction inst, mips_cpu_h state) {
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.dst, inst.src1, inst.src2);
+	}
+	uint32_t va = state->regs[inst.src1];
+	uint32_t vb = state->regs[inst.src2];
+	uint32_t res;
+	res=va^vb;
+	state->regs[inst.dst] = res;
+
+	return 4;
+}
+
+uint32_t _sltu(instruction inst, mips_cpu_h state) {
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.dst, inst.src1, inst.src2);
+	}
+	uint32_t va = state->regs[inst.src1];
+	uint32_t vb = state->regs[inst.src2];
+	uint32_t res;
+	if (vb > va) {state->regs[inst.dst] = 0x01;}
+	else {state->regs[inst.dst] = 0x00;}
+	return 4;
+}
+
+uint32_t beq(instruction inst, mips_cpu_h state) {
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src1, inst.src2, inst.ioffset);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
 	uint32_t retval = 4;
-	if (name == "beq") {
-		if (va == vb) {
-		
-			retval = inst.ioffset << 2;
-			
-		}
-	} 
-	if(state->logLevel >= 0){
+	if (va == vb) {
+		retval = inst.ioffset << 2;
+	}
+	if(state->logLevel >= 2){
 		fprintf(state->logDst, "pc offset = %x\n", retval);
 	}
 	return retval;
@@ -237,37 +265,35 @@ mips_error mips_cpu_step(
 		fprintf(state->logDst, "Current pc = %x\n", state->pc);
 		fprintf(state->logDst, "type = %i\n", inst.opcode);
     }
+	
     if(inst.type == 1) {
-        if(state->logLevel >= 2) {
+        if(state->logLevel >= 3) {
             fprintf(state->logDst, "R-Type : dst=%u, src1=%u, src2=%u, shift=%u, function=%u.\n  instr=%08x\n",
                 inst.dst, inst.src1, inst.src2, inst.shift, inst.function, inst.whole
             );
         }
-        
         if(inst.function ==  0x21){
-			offset = subtype1("addu",inst,state);
+			offset = _addu(inst,state);
         } else if(inst.function ==  0x24) {
-			offset = subtype1("and",inst,state);
+			offset = _and(inst,state);
 		} else if(inst.function ==  0x25) {
-			offset = subtype1("or",inst,state);
+			offset = _or(inst,state);
 		} else if(inst.function ==  0x26) {
-			offset = subtype1("xor",inst,state);
+			offset = _xor(inst,state);
 		} else if(inst.function ==  0x28) {
-            		offset = subtype1("sltu",inst,state);
+			offset = _sltu(inst,state);
         }
-    } else if(inst.type == 2 ) {
-       	if(state->logLevel >= 2) {
-            fprintf(state->logDst, "I-Type: src1=%u, src2=%u, ioffset=%u", inst.src1, inst.src2, inst.ioffset );
+    } else if(inst.type == 2) {
+       	if(state->logLevel >= 3) {
+            fprintf(state->logDst, "I-Type: src1=%u, src2=%u, ioffset=%u\n", inst.src1, inst.src2, inst.ioffset );
         }
 		if(inst.opcode ==  4){
-			offset = subtype2("beq",inst, state);
+			offset = beq(inst, state);
 		}
 		
     } else {
 	return mips_ErrorNotImplemented;
     }
-	//
-	
 	state->regs[0] = 0;
 	state->pc = state->pcNext;
 	uint16_t unsig_offset;
@@ -278,7 +304,7 @@ mips_error mips_cpu_step(
 		state->pcNext += unsig_offset;
 	}
 	
-	if(state->logLevel >= 4) {
+	if(state->logLevel >= 3) {
             fprintf(state->logDst, "pcNext = %x\n", state-> pcNext);
     }
 	return mips_Success;
