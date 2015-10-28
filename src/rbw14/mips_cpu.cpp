@@ -139,12 +139,12 @@ mips_error mips_cpu_set_register(
 	uint32_t value		//!< New value to write into register file
 )
 {
-	try {
-		state->regs[index] = value;
-	} catch (mips_error e) {
-		return e;
-	}
-
+	if(state==0)
+		return mips_ErrorInvalidHandle;
+	if(index>=32)
+		return mips_ErrorInvalidArgument;
+	if(index != 0)
+		state->regs[index]=value;
     return mips_Success;
 }
 
@@ -350,7 +350,7 @@ uint32_t _addi(instruction inst, mips_cpu_h state, mips_error& e) {
 }
 
 uint32_t _lui(instruction inst, mips_cpu_h state) {
-	if(state->logLevel >= 1){
+	if(state->logLevel >= 2){
 		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.idata, inst.src1, inst.src2);
 	}
 
@@ -359,37 +359,120 @@ uint32_t _lui(instruction inst, mips_cpu_h state) {
 	return 4;
 }
 
-uint32_t _lw(instruction inst, mips_cpu_h state, mips_error& e) {
-	if(state->logLevel >= 1){
+uint32_t _lb(instruction inst, mips_cpu_h state, mips_error& e) {
+
+	if ((inst.idata & 0x8000) != 0) {
+		inst.idata = inst.idata | 0xFFFF0000;
+	}
+	if(state->logLevel >= 2){
 		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.idata, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
-	uint32_t vb = int32_t(inst.idata);
+	uint32_t vb = inst.idata;
 	uint32_t address = va + vb;
-	uint32_t va_sign = va & 0x80000000;
-	uint32_t vb_sign = vb & 0x80000000;
-	uint32_t address_sign = address & 0x80000000;
-	if ((va_sign == 0 && vb_sign == 0 && address_sign != 0)||(va_sign != 0 && vb_sign != 0 && address_sign == 0)||((address && 0x03) != 0)) {
-		e = mips_ExceptionArithmeticOverflow;
-		return 4;
-	}
-	if(state->logLevel >= 1){
-		fprintf(state->logDst, "%s : va = %i , vb = %i ,address = %i", __func__, va, vb, address);
-	}
-	if ((address && 0x03) != 0) {
-		e = mips_ExceptionArithmeticOverflow;
+
+	
+	uint8_t buffer[4];
+	e = mips_mem_read(state->mem, address, 4, buffer );
+	
+	if (e != 0) {
 		return 4;
 	}
 	
-	uint8_t buffer[2];
-	e = mips_mem_read(
-        state->mem,		//!< Handle to target memory
-        address,	//!< Byte address to start transaction at
-        2,	//!< Number of bytes to transfer
-        buffer	//!< Receives the target bytes
-    );
+	uint32_t res = (uint32_t(buffer[0]));
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : va = %i , vb = %i ,address = %i, res = %x", __func__, va, vb, address, res);
+	}
+	if ((res & 0x80) != 0) {
+		res = res | 0xFFFFFF00;
+	}
 	
-	state->regs[inst.src2] = (uint32_t(buffer[1]) << 4 | uint32_t(buffer[0]) << 0);
+	e = mips_cpu_set_register(state,inst.src2,res);
+		
+	return 4;
+}
+
+
+uint32_t _lbu(instruction inst, mips_cpu_h state, mips_error& e) {
+
+	if ((inst.idata & 0x8000) != 0) {
+		inst.idata = inst.idata | 0xFFFF0000;
+	}
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.idata, inst.src1, inst.src2);
+	}
+	uint32_t va = state->regs[inst.src1];
+	uint32_t vb = inst.idata;
+	uint32_t address = va + vb;
+
+	
+	uint8_t buffer[4];
+	e = mips_mem_read(state->mem, address, 4, buffer );
+	
+	if (e != 0) {
+		return 4;
+	}
+	
+	uint32_t res = (uint32_t(buffer[0]));
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : va = %i , vb = %i ,address = %i, res = %x", __func__, va, vb, address, res);
+	}
+
+	e = mips_cpu_set_register(state,inst.src2,res);
+		
+	return 4;
+}
+
+uint32_t _lw(instruction inst, mips_cpu_h state, mips_error& e) {
+
+	if ((inst.idata & 0x8000) != 0) {
+		inst.idata = inst.idata | 0xFFFF0000;
+	}
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.idata, inst.src1, inst.src2);
+	}
+	uint32_t va = state->regs[inst.src1];
+	uint32_t vb = inst.idata;
+	uint32_t address = va + vb;
+
+	
+	uint8_t buffer[4];
+	e = mips_mem_read(state->mem, address, 4, buffer );
+	
+	if (e != 0) {
+		return 4;
+	}
+	uint32_t res = (uint32_t(buffer[0]) << 24) | (uint32_t(buffer[1]) << 16) | (uint32_t(buffer[2]) << 8) | (uint32_t(buffer[3]));
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : va = %i , vb = %i ,address = %i, res = %x", __func__, va, vb, address, res);
+	}
+	e = mips_cpu_set_register(state,inst.src2,res);
+		
+	return 4;
+}
+
+uint32_t _sw(instruction inst, mips_cpu_h state, mips_error& e) {
+	if ((inst.idata & 0x8000) != 0) {
+		inst.idata = inst.idata | 0xFFFF0000;
+	}
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.idata, inst.src1, inst.src2);
+	}
+	uint32_t va = state->regs[inst.src1];
+	uint32_t vb = inst.idata;
+	uint32_t address = va + vb;
+	uint32_t stored = state->regs[inst.src2];
+	
+	
+	uint8_t buffer[4];
+	buffer[0] = stored >> 24 & 0xFF;
+	buffer[1] = (stored >> 16) & 0xFF;
+	buffer[2] = (stored >> 8) & 0xFF;
+	buffer[3] = (stored) & 0xFF;
+	
+	e = mips_mem_write(state->mem, address, 4, buffer);
+
+		
 	return 4;
 }
 
@@ -678,6 +761,14 @@ mips_error mips_cpu_step(
 			offset = _lw(inst,state,err);
 		} else if (inst.opcode == 0x0F) {
 			offset = _lui(inst,state);
+		} else if (inst.opcode == 0x2B) {
+			offset = _sw(inst,state,err);
+		} else if (inst.opcode == 0x20) {
+			offset = _lb(inst,state,err);
+		} else if (inst.opcode == 0x24) {
+			offset = _lbu(inst,state,err);
+		} if (inst.opcode == 0x04) {
+			cout << "BEQ" << endl;
 		} 
 		
 	}
