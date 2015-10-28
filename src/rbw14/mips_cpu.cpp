@@ -68,6 +68,16 @@ bool sig_to_unsig(uint16_t sig, uint16_t* unsig) {
 
 }
 
+mips_error mips_cpu_reset(mips_cpu_h state) {
+	int i;
+	state->pc = 0;
+	state->pcNext = 4;
+	for (i = 0; i < 32; i++) {
+		state->regs[i] = 0;
+	}
+	return mips_Success;
+}
+
 void mips_cpu_free(mips_cpu_h state)
 {
 	if(state != NULL)
@@ -339,6 +349,49 @@ uint32_t _addi(instruction inst, mips_cpu_h state, mips_error& e) {
 	return 4;
 }
 
+uint32_t _lui(instruction inst, mips_cpu_h state) {
+	if(state->logLevel >= 1){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.idata, inst.src1, inst.src2);
+	}
+
+	uint32_t vb = inst.idata;
+	state->regs[inst.src2] = vb << 16;	
+	return 4;
+}
+
+uint32_t _lw(instruction inst, mips_cpu_h state, mips_error& e) {
+	if(state->logLevel >= 1){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.idata, inst.src1, inst.src2);
+	}
+	uint32_t va = state->regs[inst.src1];
+	uint32_t vb = int32_t(inst.idata);
+	uint32_t address = va + vb;
+	uint32_t va_sign = va & 0x80000000;
+	uint32_t vb_sign = vb & 0x80000000;
+	uint32_t address_sign = address & 0x80000000;
+	if ((va_sign == 0 && vb_sign == 0 && address_sign != 0)||(va_sign != 0 && vb_sign != 0 && address_sign == 0)||((address && 0x03) != 0)) {
+		e = mips_ExceptionArithmeticOverflow;
+		return 4;
+	}
+	if(state->logLevel >= 1){
+		fprintf(state->logDst, "%s : va = %i , vb = %i ,address = %i", __func__, va, vb, address);
+	}
+	if ((address && 0x03) != 0) {
+		e = mips_ExceptionArithmeticOverflow;
+		return 4;
+	}
+	
+	uint8_t buffer[2];
+	e = mips_mem_read(
+        state->mem,		//!< Handle to target memory
+        address,	//!< Byte address to start transaction at
+        2,	//!< Number of bytes to transfer
+        buffer	//!< Receives the target bytes
+    );
+	
+	state->regs[inst.src2] = (uint32_t(buffer[1]) << 4 | uint32_t(buffer[0]) << 0);
+	return 4;
+}
 
 uint32_t _sltiu(instruction inst, mips_cpu_h state) {
 	if ((inst.idata & 0x8000) != 0) {
@@ -564,7 +617,6 @@ mips_error mips_cpu_step(
 		fprintf(state->logDst, "type = %i\n", inst.opcode);
     }
 	
-	
     if(inst.type == 1) {
 		if (inst.opcode != 0x00 && state -> logLevel >= 1) {
 			fprintf(state->logDst, "R TYPE BAD DECODING");
@@ -622,14 +674,16 @@ mips_error mips_cpu_step(
 			offset = _sltiu(inst,state);
 		} else if (inst.opcode == 0x0A) {
 			offset = _slti(inst,state);
-		} else if (inst.opcode == 0x04) {
-			cout << "BEQ" << endl;
-		}
+		} else if (inst.opcode == 0x23) {
+			offset = _lw(inst,state,err);
+		} else if (inst.opcode == 0x0F) {
+			offset = _lui(inst,state);
+		} 
 		
 	}
 	if (err != mips_Success) {
-			return err;
-		}
+		return err;
+	}
 	state->regs[0] = 0;
 	
 	
