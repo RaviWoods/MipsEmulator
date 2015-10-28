@@ -14,7 +14,7 @@
 #include "mips_util.h"
 #include <limits.h>
 #include <stdbool.h>
-#define DEBUG_LEVEL 2
+#define DEBUG_LEVEL 1
 
 /**
  * Required signature for a general test operation
