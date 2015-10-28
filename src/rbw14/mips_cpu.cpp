@@ -20,7 +20,7 @@ struct mips_cpu_impl {
     uint32_t regs[32];
     mips_mem_h mem;
     unsigned logLevel;
-    FILE *logsrc3;
+    FILE *logDst;
 };
 
 //
@@ -72,8 +72,8 @@ void mips_cpu_free(mips_cpu_h state)
 {
 	if(state != NULL)
 	{
-		if(state->logsrc3 != NULL)
-			fclose(state->logsrc3);
+		if(state->logDst != NULL)
+			fclose(state->logDst);
 		free(state);
 	}
 }
@@ -141,7 +141,7 @@ mips_error mips_cpu_set_register(
 mips_error mips_cpu_set_debug_level(mips_cpu_h state, unsigned level, FILE *dest)
 {
     state->logLevel = level;
-    state->logsrc3 = dest;
+    state->logDst = dest;
     return mips_Success;
 }
 
@@ -177,7 +177,7 @@ uint32_t to_big(const uint8_t *pData)
 
 uint32_t _addu(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -190,7 +190,7 @@ uint32_t _addu(instruction inst, mips_cpu_h state) {
 
 uint32_t _add(instruction inst, mips_cpu_h state, mips_error& e) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -210,7 +210,7 @@ uint32_t _add(instruction inst, mips_cpu_h state, mips_error& e) {
 
 uint32_t _sub(instruction inst, mips_cpu_h state, mips_error& e) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -231,7 +231,7 @@ uint32_t _sub(instruction inst, mips_cpu_h state, mips_error& e) {
 
 uint32_t _slt(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -256,7 +256,7 @@ uint32_t _slt(instruction inst, mips_cpu_h state) {
 
 uint32_t _and(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -269,7 +269,7 @@ uint32_t _and(instruction inst, mips_cpu_h state) {
 
 uint32_t _andi(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.idata);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.idata);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = inst.idata;
@@ -281,7 +281,7 @@ uint32_t _andi(instruction inst, mips_cpu_h state) {
 
 uint32_t _ori(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.idata);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.idata);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = inst.idata;
@@ -293,7 +293,7 @@ uint32_t _ori(instruction inst, mips_cpu_h state) {
 
 uint32_t _xori(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.idata);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.idata);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = inst.idata;
@@ -319,7 +319,7 @@ uint32_t _addiu(instruction inst, mips_cpu_h state) {
 
 uint32_t _addi(instruction inst, mips_cpu_h state, mips_error& e) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.idata, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.idata, inst.src1, inst.src2);
 	}
 	if ((inst.idata & 0x8000) != 0) {
 		inst.idata = inst.idata | 0xFFFF0000;
@@ -339,10 +339,13 @@ uint32_t _addi(instruction inst, mips_cpu_h state, mips_error& e) {
 	return 4;
 }
 
-/*
+
 uint32_t _sltiu(instruction inst, mips_cpu_h state) {
+	if ((inst.idata & 0x8000) != 0) {
+		inst.idata = inst.idata | 0xFFFF0000;
+	}
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = inst.idata;
@@ -350,11 +353,37 @@ uint32_t _sltiu(instruction inst, mips_cpu_h state) {
 	else {state->regs[inst.src2] = 0x00;}
 	return 4;
 }
-*/
+
+uint32_t _slti(instruction inst, mips_cpu_h state) {
+	if ((inst.idata & 0x8000) != 0) {
+		inst.idata = inst.idata | 0xFFFF0000;
+	}
+	if(state->logLevel >= 2){
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+	}
+	uint32_t va = state->regs[inst.src1];
+	uint32_t vb = inst.idata;
+	uint32_t res;
+	res = va + (~vb + 1);
+	uint32_t va_sign = va & 0x80000000;
+	uint32_t vb_sign = vb & 0x80000000;
+	uint32_t res_sign = res & 0x80000000;
+	if (va_sign == 0 && vb_sign != 0) {
+		state->regs[inst.src2] = 0;
+	} else if (va_sign != 0 && vb_sign == 0) {
+		state->regs[inst.src2] = 1;
+	} else if (res_sign != 0) {
+		state->regs[inst.src2] = 1;
+	} else if (res_sign == 0) {
+		state->regs[inst.src2] = 0;
+	}
+
+	return 4;
+}
 
 uint32_t _or(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -367,7 +396,7 @@ uint32_t _or(instruction inst, mips_cpu_h state) {
 
 uint32_t _xor(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -380,7 +409,7 @@ uint32_t _xor(instruction inst, mips_cpu_h state) {
 
 uint32_t _sltu(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -391,7 +420,7 @@ uint32_t _sltu(instruction inst, mips_cpu_h state) {
 
 uint32_t _subu(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -404,7 +433,7 @@ uint32_t _subu(instruction inst, mips_cpu_h state) {
 
 uint32_t _sra(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t vb = state->regs[inst.src2];
 	uint32_t res;
@@ -416,7 +445,7 @@ uint32_t _sra(instruction inst, mips_cpu_h state) {
 		uint32_t ones = (uint32_t(pow(2, inst.shift)) - 1) << (32-inst.shift);
 		res = (vb>>inst.shift) | ones;
 		if(state->logLevel >= 3){
-			fprintf(state->logsrc3, "%s: shift = %x, ones = %x, in = %x, out = %x\n", __func__, inst.shift, ones, vb, res);
+			fprintf(state->logDst, "%s: shift = %x, ones = %x, in = %x, out = %x\n", __func__, inst.shift, ones, vb, res);
 		}
 	}
 	
@@ -426,7 +455,7 @@ uint32_t _sra(instruction inst, mips_cpu_h state) {
 
 uint32_t _srav(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -447,7 +476,7 @@ uint32_t _srav(instruction inst, mips_cpu_h state) {
 
 uint32_t _srl(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t vb = state->regs[inst.src2];
 	uint32_t res;
@@ -459,7 +488,7 @@ uint32_t _srl(instruction inst, mips_cpu_h state) {
 
 uint32_t _srlv(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -471,7 +500,7 @@ uint32_t _srlv(instruction inst, mips_cpu_h state) {
 
 uint32_t _sll(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t vb = state->regs[inst.src2];
 	uint32_t res;
@@ -483,7 +512,7 @@ uint32_t _sll(instruction inst, mips_cpu_h state) {
 
 uint32_t _sllv(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.src2);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -495,7 +524,7 @@ uint32_t _sllv(instruction inst, mips_cpu_h state) {
 
 uint32_t beq(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "%s : %u, %u, %u.\n", __func__, inst.src1, inst.src2, inst.idata);
+		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src1, inst.src2, inst.idata);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
@@ -504,7 +533,7 @@ uint32_t beq(instruction inst, mips_cpu_h state) {
 		retval = inst.idata << 2;
 	}
 	if(state->logLevel >= 2){
-		fprintf(state->logsrc3, "pc offset = %x\n", retval);
+		fprintf(state->logDst, "pc offset = %x\n", retval);
 	}
 	return retval;
 }
@@ -528,20 +557,20 @@ mips_error mips_cpu_step(
     }
     instruction inst = (uint32_t(buffer[0]) << 24 | uint32_t(buffer[1]) << 16 | uint32_t(buffer[2]) << 8 | uint32_t(buffer[3]) << 0);
 	
-    int offset = 4;
+    int offset;
 	
     if(state->logLevel >= 3) {
-		fprintf(state->logsrc3, "Current pc = %x\n", state->pc);
-		fprintf(state->logsrc3, "type = %i\n", inst.opcode);
+		fprintf(state->logDst, "Current pc = %x\n", state->pc);
+		fprintf(state->logDst, "type = %i\n", inst.opcode);
     }
 	
 	
     if(inst.type == 1) {
 		if (inst.opcode != 0x00 && state -> logLevel >= 1) {
-			fprintf(state->logsrc3, "R TYPE BAD DECODING");
+			fprintf(state->logDst, "R TYPE BAD DECODING");
 		}
         if(state->logLevel >= 3) {
-            fprintf(state->logsrc3, "R-Type : src3=%u, src1=%u, src2=%u, shift=%u, function=%u.\n  instr=%08x\n",
+            fprintf(state->logDst, "R-Type : src3=%u, src1=%u, src2=%u, shift=%u, function=%u.\n  instr=%08x\n",
                 inst.src3, inst.src1, inst.src2, inst.shift, inst.function, inst.whole
             );
         }
@@ -590,7 +619,11 @@ mips_error mips_cpu_step(
 		} else if (inst.opcode == 0x08) {
 			offset = _addi(inst,state,err);
 		} else if (inst.opcode == 0x0B) {
-			//offset = _sltiu(inst,state);
+			offset = _sltiu(inst,state);
+		} else if (inst.opcode == 0x0A) {
+			offset = _slti(inst,state);
+		} else if (inst.opcode == 0x04) {
+			cout << "BEQ" << endl;
 		}
 		
 	}
@@ -598,22 +631,22 @@ mips_error mips_cpu_step(
 			return err;
 		}
 	state->regs[0] = 0;
-	/*
+	
 	
 	state->pc = state->pcNext;
 	state->pcNext += offset;
-	/*
+	
 	uint16_t unsig_offset;
 	bool negative = sig_to_unsig(offset,&unsig_offset); 
 	if (negative) {
 		state->pcNext -= unsig_offset;
 	} else {
-		state->pcNext += unsig_offset;
+		state->pcNext += offset;
 	}
-	*/
+	
 	
 	if(state->logLevel >= 3) {
-            fprintf(state->logsrc3, "pcNext = %x\n", state-> pcNext);
+            fprintf(state->logDst, "pcNext = %x\n", state-> pcNext);
     }
 	return mips_Success;
 }
