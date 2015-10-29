@@ -1,18 +1,18 @@
 #include "headers_and_defines.h"
-#include <bitset>
+
 struct test_instr {
 	string name;
 	uint32_t whole;
 	uint32_t opcode;
-    	uint32_t src1;
+    uint32_t src1;
 	uint32_t src1_data;
-   	uint32_t src2; 
+    uint32_t src2; 
 	uint32_t src2_data;
    	uint32_t src3;
 	uint32_t src3_success_data;
 	uint32_t pc_bef;
 	uint32_t pc_aft;
-    	uint32_t shift;
+    uint32_t shift;
    	uint32_t function;
 	uint32_t idata;
 	int type; // R = 1, I = 2, J = 3 
@@ -45,12 +45,14 @@ struct test_instr {
 			shift = 0;
 			type = 1;
 		} else if (name_in == "sll") {
+			shift = src1_in;
+			src1_in = 0x00;
 			function = 0x00;
-			shift = 0;
 			type = 1;
 		} else if (name_in == "srl") {
+			shift = src1_in;
+			src1_in = 0x00;
 			function =  0x02;
-			shift = 0;
 			type = 1;
 		} else if (name_in == "sllv") {
 			function = 0x04;
@@ -61,8 +63,9 @@ struct test_instr {
 			shift = 0;
 			type = 1;
 		} else if (name_in == "sra") {
+			shift = src1_in;
+			src1_in = 0x00;
 			function = 0x03;
-			shift = 0;
 			type = 1;
 		} else if (name_in == "srav") {
 			function = 0x07;
@@ -80,51 +83,9 @@ struct test_instr {
 			function = 0x2A;
 			shift = 0;
 			type = 1;
-		} else if (name_in == "andi") {
-			opcode = 0x0C;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "xori") {
-			opcode = 0x0E;
-			shift = 0;
-			type = 2;
-		} else if (name_in == "ori") {
-			opcode = 0x0D;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "addiu") {
-			opcode = 0x09;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "addi") {
-			opcode = 0x08;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "sltiu") {
-			opcode = 0x0B;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "slti") {
-			opcode = 0x0A;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "lw") {
-			opcode = 0x23;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "lui") {
-			opcode = 0x0F;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "sw") {
-			opcode = 0x2B;
-			shift = 0;
-			type = 1;
-		} 
-
-
+		}
+		
 		if (type == 1) {
-			
 			opcode = 0;
 			src1 = src1_in;
 			src1_data = src1_data_in;
@@ -132,12 +93,14 @@ struct test_instr {
 			src2_data = src2_data_in;
 			src3 = src3_in;
 			src3_success_data = src3_success_data_in;
+			opcode = 0;
 
 
 			mips_error e = mips_cpu_set_register(cpu_in, src1, src1_data);
 			e = mips_cpu_set_register(cpu_in, src2, src2_data);
 			e = mips_cpu_get_pc(cpu_in,&pc_bef);
 			pc_aft = pc_bef + pc_diff;
+			
 			uint32_t whole =
 				(src1 << 21) // srca = r4
 				|
@@ -163,43 +126,7 @@ struct test_instr {
 			);
 			
 			if(e!=mips_Success){
-				fprintf(stderr, "mips_cpu failed.\n");
-				exit(1);
-			}
-		} else if (type == 2) {
-			
-			src1 = src1_in;
-			src1_data = src1_data_in;
-			idata = src2_data_in;
-			src3 = src3_in;
-			src3_success_data = src3_success_data_in;
-
-			mips_error e = mips_cpu_set_register(cpu_in, src1, src1_data);
-			e = mips_cpu_get_pc(cpu_in,&pc_bef);
-			pc_aft = pc_bef + pc_diff;
-			uint32_t whole =
-				((opcode & 0x2F) << 26) 
-				|
-				((src1 & 0x1F) << 21) 
-				|
-				((src3 & 0x1F) << 16) 
-				|
-				((idata & 0xFFFF) << 0);
-			uint8_t buffer[4];
-			buffer[0]=(whole>>24)&0xFF;
-			buffer[1]=(whole>>16)&0xFF;
-			buffer[2]=(whole>>8)&0xFF;
-			buffer[3]=(whole>>0)&0xFF;
-
-			e = mips_mem_write(
-				mem_in,	        //!< Handle to target memory
-				pc_bef,	            //!< Byte address to start transaction at
-				4,	            //!< Number of bytes to transfer
-				buffer	        //!< Receives the target bytes
-			);
-
-			if(e!=mips_Success){
-				fprintf(stderr, "mips_cpu failed.\n");
+				fprintf(stderr, "mips_cpu_step : failed.\n");
 				exit(1);
 			}
 		}
@@ -211,25 +138,21 @@ struct test_instr {
 void r_type_test(test_instr instr, mips_cpu_h cpu_in) {
 	
 	int testId = mips_test_begin_test(instr.name.c_str());   
-	
+	mips_error e = mips_cpu_step(cpu_in);
 	uint32_t got;
 	uint32_t pc_new;
-	if (instr.name == "xori") {
-		cout << instr.src3 << endl;
-		cout << "0x" << hex <<  instr.src3_success_data << endl;
-	}	
-	
-	mips_error e = mips_cpu_get_register(cpu_in, instr.src3, &got);
-	e = mips_cpu_step(cpu_in);
+	e = mips_cpu_get_register(cpu_in, instr.src3, &got);
 	e = mips_cpu_get_pc(cpu_in,&pc_new);
 	if(e!=mips_Success){
 		fprintf(stderr, "mips_cpu_step : failed.\n");
 		exit(1);
 	}
 	int passed;
-
 	if (got == instr.src3_success_data && instr.pc_aft == pc_new) {
 		passed = 1;
+	} else {
+		passed = 0;
+		cout << "failed, with inputs " << hex << instr.src1_data << " and " << hex << instr.src2_data << " and output " << hex << got << endl;
 	}
 	
     stringstream ss;
@@ -292,11 +215,99 @@ int main()
 	
 	test_instr xor3(4, "xor", 4, 0x6666666, 2, 0x6666666, 0, 0x00, cpu, mem);
 	r_type_test(xor3, cpu);
-
 	
-	test_instr xori1(4, "xori", 5, 0xF0F0F0F0, 0, 0x0000FFFF, 10, 0xf0f00f0f, cpu, mem);
-	r_type_test(xori1, cpu);
-
+	//SUBU
+	test_instr subu1(4, "subu", 10, 0x0000FFFF, 4, 0xFFFFFFFF, 31, 0x00010000, cpu, mem);
+	r_type_test(subu1, cpu);
+	
+	test_instr subu2(4, "subu", 0, 0xFFFFFFFF, 2, 0xFFFFFFFF, 3, 0x1, cpu, mem);
+	r_type_test(subu2, cpu);
+	
+	test_instr subu3(4, "subu", 4, 0x6666666, 2, 0x6666666, 0, 0x00, cpu, mem);
+	r_type_test(subu3,cpu);
+	
+	//SLTU
+	test_instr sltu1(4, "sltu", 10, 0x0000FFFF, 4, 0xFFFFFFFF, 31, 0x01, cpu, mem);
+	r_type_test(sltu1, cpu);
+	
+	test_instr sltu2(4, "sltu", 28, 0xFFFFFFFF, 2, 0x0000FFFF, 3, 0x00, cpu, mem);
+	r_type_test(sltu2, cpu);
+	
+	test_instr sltu3(4, "sltu", 4, 0xFFFFFFFF, 2, 0xFFFFFFFF, 5, 0x00, cpu, mem);
+	r_type_test(sltu3,cpu);
+	
+	test_instr sltu4(4, "sltu", 0, 0x6666666, 5, 0x6666666, 5, 0x01, cpu, mem);
+	r_type_test(sltu4,cpu);
+	
+	test_instr sltu5(4, "sltu", 4, 0x0000FFFF, 2, 0xFFFFFFFF, 0, 0x00, cpu, mem);
+	r_type_test(sltu5,cpu);
+	
+	//SLL
+	test_instr sll1(4, "sll", 0x04, 0x00, 4, 0xFFFFFFFF, 31, 0xFFFFFFF0, cpu, mem);
+	r_type_test(sll1, cpu);
+	
+	test_instr sll2(4, "sll", 0x04, 0x00, 0, 0xFFFFFFFF, 31, 0x00, cpu, mem);
+	r_type_test(sll2, cpu);
+	
+	test_instr sll3(4, "sll", 0x04, 0x00, 4, 0xFFFFFFFF, 0, 0x00, cpu, mem);
+	r_type_test(sll3, cpu);
+	
+	//SRL
+	test_instr srl1(4, "srl", 0x04, 0x00, 4, 0xFFFFFFFF, 31, 0x0FFFFFFF, cpu, mem);
+	r_type_test(srl1, cpu);
+	
+	test_instr srl2(4, "srl", 0x04, 0x00, 0, 0xFFFFFFFF, 31, 0x00, cpu, mem);
+	r_type_test(srl2, cpu);
+	
+	test_instr srl3(4, "srl", 0x04, 0x00, 4, 0xFFFFFFFF, 0, 0x00, cpu, mem);
+	r_type_test(srl3, cpu);
+	
+	//SRA
+	test_instr sra1(4, "sra", 0x04, 0x00, 4, 0xF00000FF, 31, 0xFF00000F, cpu, mem);
+	r_type_test(sra1, cpu);
+	
+	test_instr sra2(4, "sra", 0x08, 0x00, 4, 0x000000FFF, 31, 0x0000000F, cpu, mem);
+	r_type_test(sra2, cpu);
+	
+	test_instr sra3(4, "sra", 0x04, 0x00, 0, 0xFFFFFFFF, 31, 0x00, cpu, mem);
+	r_type_test(sra3, cpu);
+	
+	test_instr sra4(4, "sra", 0x04, 0x00, 4, 0xFFFFFFFF, 0, 0x00, cpu, mem);
+	r_type_test(sra4, cpu);
+	
+	//SRAV
+	test_instr srav1(4, "srav", 4, 0x04, 5, 0xF00000FF, 31, 0xFF00000F, cpu, mem);
+	r_type_test(srav1, cpu);
+	
+	test_instr srav2(4, "srav", 7, 0x08, 6, 0x000000FFF, 31, 0x0000000F, cpu, mem);
+	r_type_test(srav2, cpu);
+	
+	test_instr srav3(4, "srav", 0, 0x04, 5, 0x01, 31, 0x01, cpu, mem);
+	r_type_test(srav3, cpu);
+	
+	test_instr srav4(4, "srav", 4, 0x04, 4, 0xFFFFFFFF, 0, 0x00, cpu, mem);
+	r_type_test(srav4, cpu);
+	
+	//SLLV
+	test_instr sllv1(4, "sllv", 4, 0xFFFFFFFF, 10, 0x11111111, 31, 0x80000000, cpu, mem);
+	r_type_test(sllv1, cpu);
+	
+	test_instr sllv2(4, "sllv", 0, 0xFFFFFFFF, 3, 0xFFFFFFFF, 31, 0xFFFFFFFF, cpu, mem);
+	r_type_test(sllv2, cpu);
+	
+	test_instr sllv3(4, "sllv", 4, 0xFFFFFFFF, 5, 0x11111111, 0, 0x00, cpu, mem);
+	r_type_test(sllv3, cpu);
+	
+	//SRLV
+	test_instr srlv1(4, "srlv", 4, 0x04, 10, 0xFFFFFFFF, 31, 0x0FFFFFFF, cpu, mem);
+	r_type_test(srlv1, cpu);
+	
+	test_instr srlv2(4, "srlv", 0, 0xFFFFFFFF, 3, 0xFFFFFFFF, 31, 0xFFFFFFFF, cpu, mem);
+	r_type_test(srlv2, cpu);
+	
+	test_instr srlv3(4, "srlv", 4, 0xFFFFFFFF, 5, 0x11111111, 0, 0x00, cpu, mem);
+	r_type_test(srlv3, cpu);
+	
 	mips_test_end_suite();
     
     return 0;
