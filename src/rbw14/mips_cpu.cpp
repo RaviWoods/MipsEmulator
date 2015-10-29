@@ -143,6 +143,8 @@ mips_error mips_cpu_set_register(
 		return mips_ErrorInvalidHandle;
 	if(index>=32)
 		return mips_ErrorInvalidArgument;
+	if(index == 0)
+		 state->regs[index]=0;
 	if(index != 0)
 		state->regs[index]=value;
     return mips_Success;
@@ -358,40 +360,6 @@ uint32_t _lui(instruction inst, mips_cpu_h state) {
 	state->regs[inst.src2] = vb << 16;	
 	return 4;
 }
-
-uint32_t _lb(instruction inst, mips_cpu_h state, mips_error& e) {
-
-	if ((inst.idata & 0x8000) != 0) {
-		inst.idata = inst.idata | 0xFFFF0000;
-	}
-	if(state->logLevel >= 2){
-		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.idata, inst.src1, inst.src2);
-	}
-	uint32_t va = state->regs[inst.src1];
-	uint32_t vb = inst.idata;
-	uint32_t address = va + vb;
-
-	
-	uint8_t buffer[4];
-	e = mips_mem_read(state->mem, address, 4, buffer );
-	
-	if (e != 0) {
-		return 4;
-	}
-	
-	uint32_t res = (uint32_t(buffer[0]));
-	if(state->logLevel >= 2){
-		fprintf(state->logDst, "%s : va = %i , vb = %i ,address = %i, res = %x", __func__, va, vb, address, res);
-	}
-	if ((res & 0x80) != 0) {
-		res = res | 0xFFFFFF00;
-	}
-	
-	e = mips_cpu_set_register(state,inst.src2,res);
-		
-	return 4;
-}
-
 
 uint32_t _lbu(instruction inst, mips_cpu_h state, mips_error& e) {
 
@@ -763,12 +731,10 @@ mips_error mips_cpu_step(
 			offset = _lui(inst,state);
 		} else if (inst.opcode == 0x2B) {
 			offset = _sw(inst,state,err);
-		} else if (inst.opcode == 0x20) {
-			offset = _lb(inst,state,err);
-		} else if (inst.opcode == 0x24) {
+		}else if (inst.opcode == 0x24) {
 			offset = _lbu(inst,state,err);
 		} if (inst.opcode == 0x04) {
-			cout << "BEQ" << endl;
+			//cout << "BEQ" << endl;
 		} 
 		
 	}
@@ -780,15 +746,7 @@ mips_error mips_cpu_step(
 	
 	state->pc = state->pcNext;
 	state->pcNext += offset;
-	
-	uint16_t unsig_offset;
-	bool negative = sig_to_unsig(offset,&unsig_offset); 
-	if (negative) {
-		state->pcNext -= unsig_offset;
-	} else {
-		state->pcNext += offset;
-	}
-	
+
 	
 	if(state->logLevel >= 3) {
             fprintf(state->logDst, "pcNext = %x\n", state-> pcNext);
