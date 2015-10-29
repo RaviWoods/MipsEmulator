@@ -83,7 +83,47 @@ struct test_instr {
 			function = 0x2A;
 			shift = 0;
 			type = 1;
-		}
+		} else if (name_in == "andi") {
+			opcode = 0x0C;
+			shift = 0;
+			type = 2;
+		} else if (name_in == "xori") {
+			opcode = 0x0E;
+			shift = 0;
+			type = 2;
+		} else if (name_in == "ori") {
+			opcode = 0x0D;
+			shift = 0;
+			type = 2;
+		} else if (name_in == "addiu") {
+			opcode = 0x09;
+			shift = 0;
+			type = 2;
+		} else if (name_in == "addi") {
+			opcode = 0x08;
+			shift = 0;
+			type = 2;
+		} else if (name_in == "sltiu") {
+			opcode = 0x0B;
+			shift = 0;
+			type = 2;
+		} else if (name_in == "slti") {
+			opcode = 0x0A;
+			shift = 0;
+			type = 2;
+		} else if (name_in == "lw") {
+			opcode = 0x23;
+			shift = 0;
+			type = 2;
+		} else if (name_in == "lui") {
+			opcode = 0x0F;
+			shift = 0;
+			type = 2;
+		} else if (name_in == "sw") {
+			opcode = 0x2B;
+			shift = 0;
+			type = 2;
+		} 
 		
 		if (type == 1) {
 			opcode = 0;
@@ -129,6 +169,43 @@ struct test_instr {
 				fprintf(stderr, "mips_cpu_step : failed.\n");
 				exit(1);
 			}
+		} else if (type == 2) {
+			src1 = src1_in;
+			src1_data = src1_data_in;
+			idata = src2_data_in;
+			src3 = src3_in;
+			src3_success_data = src3_success_data_in;
+
+
+			mips_error e = mips_cpu_set_register(cpu_in, src1, src1_data);
+			e = mips_cpu_get_pc(cpu_in,&pc_bef);
+			pc_aft = pc_bef + pc_diff;
+			
+			uint32_t whole =
+				((opcode  & 0x2F) << 26)
+				|
+				((src1  & 0x1F) << 21)
+				|
+				((src3  & 0x1F) << 16) // dst = r3
+				|
+				(idata & 0xFFFF);
+    
+			uint8_t buffer[4];
+			buffer[0]=(whole>>24)&0xFF;
+			buffer[1]=(whole>>16)&0xFF;
+			buffer[2]=(whole>>8)&0xFF;
+			buffer[3]=(whole>>0)&0xFF;
+			e = mips_mem_write(
+				mem_in,	        //!< Handle to target memory
+				pc_bef,	            //!< Byte address to start transaction at
+				4,	            //!< Number of bytes to transfer
+				buffer	        //!< Receives the target bytes
+			);
+			
+			if(e!=mips_Success){
+				fprintf(stderr, "mips_cpu_step : failed.\n");
+				exit(1);
+			}
 		}
 	}
 	
@@ -152,7 +229,7 @@ void r_type_test(test_instr instr, mips_cpu_h cpu_in) {
 		passed = 1;
 	} else {
 		passed = 0;
-		cout << "failed, with inputs " << hex << instr.src1_data << " and " << hex << instr.src2_data << " and output " << hex << got << endl;
+		cout << "failed, with inputs " << hex << instr.src1_data << " and " << hex << instr.idata << " and output " << hex << got << endl;
 	}
 	
     stringstream ss;
@@ -307,6 +384,10 @@ int main()
 	
 	test_instr srlv3(4, "srlv", 4, 0xFFFFFFFF, 5, 0x11111111, 0, 0x00, cpu, mem);
 	r_type_test(srlv3, cpu);
+	
+	//XORI
+	test_instr xori1(4, "xori", 10, 0xF0F0F0F0, 4, 0x0000FFFF, 31, 0xF0F00F0F, cpu, mem);
+	r_type_test(xori1, cpu);
 	
 	mips_test_end_suite();
     
