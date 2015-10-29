@@ -303,7 +303,8 @@ uint32_t _ori(instruction inst, mips_cpu_h state) {
 	return 4;
 }
 
-uint32_t _xori(instruction inst, mips_cpu_h state) {
+uint32_t _xori(instruction inst, mips_cpu_h state) {	
+	cout << bitset<32>(inst.whole) << endl;
 	if(state->logLevel >= 2){
 		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src3, inst.src1, inst.idata);
 	}
@@ -312,6 +313,7 @@ uint32_t _xori(instruction inst, mips_cpu_h state) {
 	uint32_t res;
 	res=va^vb;
 	state->regs[inst.src2] = res;
+	cout << hex << inst.src2 << endl;
 	return 4;
 }
 
@@ -667,7 +669,6 @@ mips_error mips_cpu_step(
 		fprintf(state->logDst, "Current pc = %x\n", state->pc);
 		fprintf(state->logDst, "type = %i\n", inst.opcode);
     }
-	
     if(inst.type == 1) {
 		if (inst.opcode != 0x00 && state -> logLevel >= 1) {
 			fprintf(state->logDst, "R TYPE BAD DECODING");
