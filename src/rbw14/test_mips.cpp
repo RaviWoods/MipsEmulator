@@ -252,7 +252,6 @@ struct test_instr {
 
 void basic_inst_test(test_instr instr, mips_cpu_h cpu_in, mips_error test_error_in) {
 	
-	cout << instr.name << endl;
 	int testId = mips_test_begin_test(instr.name.c_str());  
 	uint32_t got;
 	uint32_t pc_new;
@@ -305,7 +304,7 @@ void basic_inst_test(test_instr instr, mips_cpu_h cpu_in, mips_error test_error_
 }
 
 void lw_test(test_instr instr, mips_cpu_h cpu_in, mips_mem_h mem_in, mips_error test_error_in) {
-	cout << instr.name << endl;
+
 	int testId = mips_test_begin_test(instr.name.c_str());  
 	mips_error test_error;
 	uint32_t got;
@@ -375,7 +374,7 @@ void lw_test(test_instr instr, mips_cpu_h cpu_in, mips_mem_h mem_in, mips_error 
 }
 
 void sw_test(test_instr instr, mips_cpu_h cpu_in, mips_mem_h mem_in, mips_error test_error_in) {
-	cout << instr.name << endl;
+
 	int testId = mips_test_begin_test(instr.name.c_str()); 
 	uint32_t pc_new;	
 	mips_error test_error;
