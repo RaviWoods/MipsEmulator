@@ -1,19 +1,18 @@
-#include <stdlib.h>
-#include <iostream>
-#include <bitset>
-#include <string>
-#include <sstream>
-#include <fstream>
-#include <stdio.h>
-#include <time.h>
-#include <map>
-#include <math.h>
-#include "mips.h"
-using namespace std;
+/*
+ * 		mips_cpu.cpp
+ *		Computer Architecture II - Coursework 1	
+ *  	Created on: 30/10/15
+ *      Author: Ravi Woods
+ *		Email: raviwoods@gmail.com
+ *      CID: 00939309
+ *      25 Commands Available
+ */
 
-bool sig_to_unsig(uint16_t sig, uint16_t* unsig);
 
-//
+
+#include "headers_and_defines.h"
+
+
 struct mips_cpu_impl {
     uint32_t pc;
     uint32_t pcNext;
@@ -23,7 +22,8 @@ struct mips_cpu_impl {
     FILE *logDst;
 };
 
-//
+
+//Holds all data for an instruction
 struct instruction {
 	instruction(uint32_t inst_in) {
 		whole = inst_in;
@@ -55,17 +55,16 @@ struct instruction {
 	int type; // R = 1, I = 2, J = 3 
 };
 
-bool sig_to_unsig(uint16_t sig, uint16_t* unsig) {
-    
-	bool negative = false;
-	if ((sig & 0x8000) != 0) {
-		negative = true;
-		*unsig = ~sig + 1;
+mips_error advancepc(mips_cpu_h state, uint32_t offset) {
+	state->pc = state->pcNext;
+	
+	if ((offset & 0x80000000) != 0) {
+		state->pcNext = state->pcNext - (~offset + 1);
 	} else {
-		*unsig = sig;
+		state->pcNext += offset;	
 	}
-	return negative;
 
+	return mips_Success;
 }
 
 mips_error mips_cpu_reset(mips_cpu_h state) {
@@ -93,28 +92,26 @@ mips_error mips_cpu_set_pc(
 	uint32_t pc			//!< Address of the next instruction to exectute.
 ) {
 	
-	try {
-		state->pc = pc;
-	} catch (mips_error e) {
-		return e;
+	if(state==0)
+		return mips_ErrorInvalidHandle;
+	if(pc%4 != 0) {
+		return mips_ExceptionInvalidAddress;
 	}
-    
-   	return mips_Success;
+	state->pc = pc;
+	state->pcNext = pc + 4;
+	return mips_Success;
 }
+
 mips_error mips_cpu_get_pc(
 	mips_cpu_h state,	//!< Valid (non-empty) handle to a CPU
 	uint32_t *pc		//!< Where to write the byte address too
 ) {
-	
+	if(state == 0)
+		return mips_ErrorInvalidHandle;
+	if(pc == 0)
+		return mips_ErrorInvalidHandle;
 	*pc = state->pc;
-	try {
-		//*pc = new uint32_t;
-		*pc = state->pc;
-	} catch (mips_error e) {
-		
-		return e;
-	}
-   	return mips_Success;
+	return mips_Success;
 }
 
 mips_error mips_cpu_get_register(
@@ -123,13 +120,15 @@ mips_error mips_cpu_get_register(
 	uint32_t *value		//!< Where to write the value to
 )
 {
-    try {
-		*value = state->regs[index];
-	} catch (mips_error e) {
-		return e;
-	}
-    
-   	return mips_Success;
+	if(state == 0)
+		return mips_ErrorInvalidHandle;
+	if(index >= 32)
+		return mips_ErrorInvalidArgument;
+	if(value == 0)
+		return mips_ErrorInvalidHandle;
+
+	*value = state->regs[index];
+	return mips_Success;
 }
 
 /*! Modifies one of the 32 general purpose MIPS registers. */
@@ -139,35 +138,32 @@ mips_error mips_cpu_set_register(
 	uint32_t value		//!< New value to write into register file
 )
 {
+	
 	if(state==0)
 		return mips_ErrorInvalidHandle;
-	if(index>=32)
+	
+	if(index >= 32) {
 		return mips_ErrorInvalidArgument;
-	if(index == 0)
+	} else if(index == 0) {
 		 state->regs[index]=0;
-	if(index != 0)
+	} else if(index != 0) {
 		state->regs[index]=value;
+	}
+	
     return mips_Success;
 }
 
 mips_error mips_cpu_set_debug_level(mips_cpu_h state, unsigned level, FILE *dest)
 {
+	if((state == 0) | (dest == 0))
+		return mips_ErrorInvalidHandle;
+	
     state->logLevel = level;
     state->logDst = dest;
     return mips_Success;
 }
 
-mips_error advancepc(mips_cpu_h state, uint32_t offset) {
-	mips_error e;
-	e = mips_cpu_set_pc(state,state->pcNext);
-	if ((offset & 0x80000000) != 0) {
-		state->pcNext = state->pcNext - (~offset + 1);
-	} else {
-		state->pcNext += offset;	
-	}
 
-	return e;
-}
 mips_cpu_h mips_cpu_create(mips_mem_h mem)
 {
     mips_cpu_impl *cpu=new mips_cpu_impl;
@@ -182,9 +178,7 @@ mips_cpu_h mips_cpu_create(mips_mem_h mem)
     return cpu;
 }
 
-/*! \param pData Array of 4 bytes
-    \retval The big-endian equivlent
-*/
+//Concatenates an array to its big endian value
 uint32_t to_big(const uint8_t *pData)
 {
     return
@@ -197,6 +191,9 @@ uint32_t to_big(const uint8_t *pData)
         (((uint32_t)pData[3])<<0);
 }
 
+//----------------------------------------------------------------------------------------------------------------------------//
+//-------------------------------------------START OF INSTRUCTION FUNCTIONS---------------------------------------------------//
+//----------------------------------------------------------------------------------------------------------------------------//
 
 uint32_t _addu(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
@@ -638,28 +635,10 @@ uint32_t _sllv(instruction inst, mips_cpu_h state) {
 	return 4;
 }
 
-uint32_t _beq(instruction inst, mips_cpu_h state) {
-	if(state->logLevel >= 2){
-		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src1, inst.src2, inst.idata);
-	}
-	uint32_t va = state->regs[inst.src1];
-	uint32_t vb = state->regs[inst.src2];
-	uint32_t retval;
-	uint32_t retval_sign;
-	if (va == vb) {
-		retval_sign = retval & 0x8000;
-		if (retval_sign != 0) {
-			retval = retval | 0xFFFF0000;
-		}
-		retval = (retval << 2);
-	} else {
-		retval = 4;
-	}
-	if(state->logLevel >= 2){
-		fprintf(state->logDst, "pc offset = %x\n", retval);
-	}
-	return retval;
-}
+//----------------------------------------------------------------------------------------------------------------------------//
+//-------------------------------------------END OF INSTRUCTION FUNCTIONS---------------------------------------------------//
+//----------------------------------------------------------------------------------------------------------------------------//
+
 
 mips_error mips_cpu_step(
 	mips_cpu_h state	//! Valid (non-empty) handle to a CPU
@@ -668,14 +647,14 @@ mips_error mips_cpu_step(
 
     uint8_t buffer[4];
     
-    mips_error err=mips_mem_read(
+    mips_error err = mips_mem_read(
         state->mem,		//!< Handle to target memory
         state->pc,	//!< Byte address to start transaction at
         4,	//!< Number of bytes to transfer
         buffer	//!< Receives the target bytes
     );
     
-    if(err!=0) {
+    if(err != mips_Success) {
         return err;
     }
     instruction inst = (uint32_t(buffer[0]) << 24 | uint32_t(buffer[1]) << 16 | uint32_t(buffer[2]) << 8 | uint32_t(buffer[3]) << 0);
@@ -688,9 +667,7 @@ mips_error mips_cpu_step(
     }
 	
     if(inst.type == 1) {
-		if (inst.opcode != 0x00 && state -> logLevel >= 1) {
-			fprintf(state->logDst, "R TYPE BAD DECODING");
-		}
+		//R TYPE FOUND
         if(state->logLevel >= 3) {
             fprintf(state->logDst, "R-Type : src3=%u, src1=%u, src2=%u, shift=%u, function=%u.\n  instr=%08x\n",
                 inst.src3, inst.src1, inst.src2, inst.shift, inst.function, inst.whole
@@ -727,9 +704,12 @@ mips_error mips_cpu_step(
 			offset = _sub(inst,state,err);
 		} else if(inst.function ==  0x2A) {
 			offset = _slt(inst,state);
-		} 
+		} else {
+			return mips_ErrorNotImplemented;
+		}
 		
-	} if (inst.type == 2) {
+	} else if (inst.type == 2) {
+		//I TYPE FOUND
 		if (inst.opcode == 0x0C) {
 			offset = _andi(inst,state);
 		} else if (inst.opcode == 0x0D) {
@@ -752,23 +732,29 @@ mips_error mips_cpu_step(
 			offset = _sw(inst,state,err);
 		} else if (inst.opcode == 0x24) {
 			offset = _lbu(inst,state,err);
-		} else if (inst.opcode == 0x04) {
-			offset = _beq(inst,state);
-		} 
-		
+		} else {
+			return mips_ErrorNotImplemented;
+		}
+	} else {
+		return mips_ErrorNotImplemented;
 	}
+	
 	if (err != mips_Success) {
 		return err;
 	}
+	
+	//If output register is zero, clear it
 	state->regs[0] = 0;
 	
-	
-
-	advancepc(state,offset);
-
+	//Advance PC by value from instruction
+	err = advancepc(state,offset);
+	if (err != mips_Success) {
+		return err;
+	}
 	
 	if(state->logLevel >= 3) {
             fprintf(state->logDst, "pcNext = %x\n", state->pcNext);
     }
+	
 	return mips_Success;
 }

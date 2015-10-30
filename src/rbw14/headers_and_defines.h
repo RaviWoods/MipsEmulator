@@ -1,7 +1,12 @@
-
-/*! \file mips.h
-    Main include file for all the simulation and test related files.
-*/
+/*
+ * 		header_and_defines.h
+ *		Computer Architecture II - Coursework 1	
+ *  	Created on: 30/10/15
+ *      Author: Ravi Woods
+ *		Email: raviwoods@gmail.com
+ *      CID: 00939309
+ */
+ 
 #ifndef headers_and_defines_h
 #define headers_and_defines_h
 
@@ -10,14 +15,11 @@
 #include <bitset>
 #include <string>
 #include <sstream>
-#include <fstream>
 #include <stdio.h>
-#include <time.h>
-#include <map>
+#include <math.h>
+
 #include "mips.h"
 using namespace std;
-
-bool sig_to_unsig(uint16_t sig, uint16_t* unsig);
 
 #define DEBUG_LEVEL 0
 
