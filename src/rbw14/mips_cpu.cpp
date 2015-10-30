@@ -323,7 +323,7 @@ uint32_t _addiu(instruction inst, mips_cpu_h state) {
 	uint32_t vb = inst.idata;
 	uint32_t res;
 	res=va+vb;
-	state->regs[inst.src2] = res;
+	state->regs[inst.src2] = res;   
 	return 4;
 }
 
