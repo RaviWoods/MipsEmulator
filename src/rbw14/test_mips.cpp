@@ -1,758 +1,3345 @@
-#include "headers_and_defines.h"
+/*
+ * test_mips.cpp
+ *
+ *  Created on: 17 Oct 2014
+ *      Author: Nick Robertson
+ *      CID: NAR213 0842277
+ *
+ *      TEST DRIVEN DEVELOPMENT: Write the test first then you won't write a test that will just check you are
+ *      doing what you thought would work
+ */
 
-struct test_instr {
-	string name;
-	uint32_t whole;
-	uint32_t opcode;
-    uint32_t src1;
-	uint32_t src1_data;
-    uint32_t src2; 
-	uint32_t src2_data;
-   	uint32_t src3;
-	uint32_t src3_success_data;
-	uint32_t pc_bef;
-	uint32_t pc_aft;
-    uint32_t shift;
-   	uint32_t function;
-	uint32_t idata;
-	int type; // R = 1, I = 2, J = 3 
-	
-	test_instr(uint32_t pc_diff, string name_in,  uint32_t src1_in, uint32_t src1_data_in, uint32_t src2_in, uint32_t src2_data_in, uint32_t src3_in, uint32_t src3_success_data_in, mips_cpu_h cpu_in, mips_mem_h mem_in ) {
+#include "mips.h"
+#include "mips_test.h"
+#include<iostream>
+#include<vector>
+#include<string>
+#include<cstdlib>
+#include<fstream>
+#include<cmath>
+#include<stdio.h>
 
-		name = name_in;
-		if (name_in == "addu") {
-			function = 0x21;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "and") {
-			function =  0x24;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "or") {
-			function = 0x25;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "xor") {
-			function =  0x26;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "sltu") {
-			function = 0x2B;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "subu") {
-			function =  0x23;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "sll") {
-			shift = src1_in;
-			src1_in = 0x00;
-			function = 0x00;
-			type = 1;
-		} else if (name_in == "srl") {
-			shift = src1_in;
-			src1_in = 0x00;
-			function =  0x02;
-			type = 1;
-		} else if (name_in == "sllv") {
-			function = 0x04;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "srlv") {
-			function = 0x06;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "sra") {
-			shift = src1_in;
-			src1_in = 0x00;
-			function = 0x03;
-			type = 1;
-		} else if (name_in == "srav") {
-			function = 0x07;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "add") {
-			function = 0x20;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "sub") {
-			function =  0x22;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "slt") {
-			function = 0x2A;
-			shift = 0;
-			type = 1;
-		} else if (name_in == "andi") {
-			opcode = 0x0C;
-			shift = 0;
-			type = 2;
-		} else if (name_in == "xori") {
-			opcode = 0x0E;
-			shift = 0;
-			type = 2;
-		} else if (name_in == "ori") {
-			opcode = 0x0D;
-			shift = 0;
-			type = 2;
-		} else if (name_in == "addiu") {
-			opcode = 0x09;
-			shift = 0;
-			type = 2;
-		} else if (name_in == "addi") {
-			opcode = 0x08;
-			shift = 0;
-			type = 2;
-		} else if (name_in == "sltiu") {
-			opcode = 0x0B;
-			shift = 0;
-			type = 2;
-		} else if (name_in == "slti") {
-			opcode = 0x0A;
-			shift = 0;
-			type = 2;
-		} else if (name_in == "lw") {
-			opcode = 0x23;
-			shift = 0;
-			type = 2;
-		} else if (name_in == "lui") {
-			opcode = 0x0F;
-			src1_in = 0;
-			src2_in = 0;
-			shift = 0;
-			type = 2;
-		} else if (name_in == "sw") {
-			opcode = 0x2B;
-			shift = 0;
-			type = 2;
-		} 
-		
-		if (type == 1) {
-			opcode = 0;
-			src1 = src1_in;
-			src1_data = src1_data_in;
-			src2 = src2_in;
-			src2_data = src2_data_in;
-			src3 = src3_in;
-			src3_success_data = src3_success_data_in;
-			opcode = 0;
+using namespace std;
+
+int main() {
+
+	mips_mem_h mem = mips_mem_create_ram(1 << 20, 4); //Block size is the size of the transactions (4=one word)
+	//With total memory size 2^20
+
+	mips_cpu_h cpu = mips_cpu_create(mem);
+
+	mips_test_begin_suite();
+
+	int testId;
+	int passed = 0;
+	uint32_t memadd = 0;
+	uint32_t instruction = 0;
+	uint32_t instruction2 = 0;
+	uint32_t got, got2;
+	mips_error err, errinc;
+	uint32_t temp;
+
+//XXX ADD   |  Add (with overflow)                      | 2
+	// 0000 00ss ssst tttt dddd d000 0010 0000
+	//Integer Overflow is Exception
+
+	//Generic Arithmetic Test
+	testId = mips_test_begin_test("add");
+	err = mips_cpu_set_register(cpu, 8, 0xFFFFFFFF); //-1
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00000001); //1
+	}
+	instruction = 0x20500901;	//add $10, $8, $9
+	memadd = 0; //PC Original Address
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00000000); //0
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	// Close to Overflow Test
+	testId = mips_test_begin_test("add");
+	err = mips_cpu_set_register(cpu, 8, 0x10000001); //Second Lowest Number
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0xFFFFFFFF); //-1
+	}
+
+	//instruction = 0x01095020; // //add $10, $8, $9/
+	instruction = 0x20500901;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x10000000); //Lowest Possible Number
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//Positive Overflow
+
+	testId = mips_test_begin_test("add");
+
+	err = mips_cpu_set_register(cpu, 8, 0x7FFFFFFF); //Largest Positive Number
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00000221); //Some Positive Integer
+	}
+
+	instruction = 0x20500901;  //add $10, $8, $9/
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	passed = (err == mips_ExceptionArithmeticOverflow);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//Negative Overflow
+
+	testId = mips_test_begin_test("add");
+	err = mips_cpu_set_register(cpu, 8, 0xFFFFFFFF); //Minus 1
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x80000000); //Largest Negative Number
+	}
+
+	instruction = 0x20500901;  //add $10, $8, $9/
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	passed = (err == mips_ExceptionArithmeticOverflow);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX ADDI  |  Add immediate (with overflow)            | 2
+	// 0010 00ss ssst tttt iiii iiii iiii iiii
+	// 0010 0000 0010 0010 0000 0000 0000 0010
+	testId = mips_test_begin_test("addi");
+	err = mips_cpu_set_register(cpu, 1, 0x00001010);
+
+	//Regular Addition
+
+	instruction = 0x02002220;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00001012);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//Arithmetic Overflow
+	testId = mips_test_begin_test("addi");
+	err = mips_cpu_set_register(cpu, 1, 0x7FFFFFFF);
+
+	instruction = 0x02002220;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_ExceptionArithmeticOverflow);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//Signed Test
+
+	testId = mips_test_begin_test("addi");
+	err = mips_cpu_set_register(cpu, 1, 0x00001111);
+
+	instruction = 0xFFFF2220;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00001110);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX ADDIU |  Add immediate unsigned (no overflow)     | 2
+	//0010 01ss ssst tttt iiii iiii iiii iiii
+	// 0010 0100 0010 0010 0000 0000 0000 0010
+	testId = mips_test_begin_test("addiu");
+	err = mips_cpu_set_register(cpu, 1, 0x00001010);
+
+	instruction = 0x02002224;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00001012);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	// Negative Immediate
+
+	testId = mips_test_begin_test("addiu");
+	err = mips_cpu_set_register(cpu, 1, 0x00001001);
+
+	instruction = 0xFFFF2224;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00001000);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX ADDU  |  Add unsigned (no overflow)               | 1
+
+	//Generic Unsigned Addition
+
+	testId = mips_test_begin_test("addu");
+	err = mips_cpu_set_register(cpu, 8, 0x0001FFFF); //Some value
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00F10000); //Some value
+	}
+
+	instruction = 0x21500901; // //addu $10, $8, $9
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x00F2FFFF);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+	//Signed addition to test if roll over occurs
+
+	//
+	testId = mips_test_begin_test("addu");
+	err = mips_cpu_set_register(cpu, 8, 0xFFFFFFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00000002);
+	}
+
+	instruction = 0x21500901; //addu $10, $8, $9
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x00000001);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//
+
+//XXX AND   |  Bitwise and                              | 1
+	testId = mips_test_begin_test("and");
+	err = mips_cpu_set_register(cpu, 8, 0x0000FFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00FFFF00);
+	}
+	// General Encoding: 0000 00ss ssst tttt dddd d000 0010 0100
+	//Specific Encoding: 0000 0001 0000 1001 0101 0000 0010 0100
+
+	//instruction = 0x01095024;
+	instruction = 0x24500901;	//and $10, $8, $9
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x0000FF00);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("and");
+	err = mips_cpu_set_register(cpu, 8, 0x00000000);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00000000);
+	}
+	// General Encoding: 0000 00ss ssst tttt dddd d000 0010 0100
+	//Specific Encoding: 0000 0001 0000 1001 0101 0000 0010 0100
+	//instruction = 0x01095024;
+	instruction = 0x24500901;	//and $10, $8, $9
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x00000000);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//ANDI  |  Bitwise and immediate                    | 2
+	//0011 00ss ssst tttt iiii iiii iiii iiii
+
+	testId = mips_test_begin_test("andi");
+	err = mips_cpu_set_register(cpu, 1, 0x00001012);
+
+	instruction = 0x02002230;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00000002);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//Zero Extended Test
+
+	testId = mips_test_begin_test("andi");
+	err = mips_cpu_set_register(cpu, 1, 0x10001012);
+
+	instruction = 0xFFFF2230;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00001012);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX BEQ   |  Branch on equal                          | 3
+	//0001 00ss ssst tttt iiii iiii iiii iiii
+	//0001 0000 0010 0010 0000 0000 0000 1000
+	// 08 00 22 10
+
+	testId = mips_test_begin_test("beq");
+	err = mips_cpu_set_register(cpu, 1, 0x00010100);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 2, 0x00010100);
+	}
+
+	instruction = 0x08002210;
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x00000024);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//Not Equal
+
+	testId = mips_test_begin_test("beq");
+	err = mips_cpu_set_register(cpu, 1, 0x00010000);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 2, 0x00010100);
+	}
+
+	instruction = 0x08002210;
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//Signed
+
+	testId = mips_test_begin_test("beq");
+	err = mips_cpu_set_register(cpu, 1, 0x00010100);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 2, 0x00010100);
+	}
+	memadd = 32;
+	instruction = 0xFEFF2210;
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the second function which should pass on most persons implementation
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+
+	passed = (err == mips_Success) && (got == 0x0000001C);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX BGEZ  |  Branch on greater than or equal to zero  | 3
+	//0000 01ss sss0 0001 iiii iiii iiii iiii
+
+	testId = mips_test_begin_test("bgez");
+	err = mips_cpu_set_register(cpu, 1, 0x00010000);
+
+	instruction = 0x08002104;
+	memadd = 0;
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x00000024);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("bgez");
+	err = mips_cpu_set_register(cpu, 1, 0x80000010);
+
+	instruction = 0x08002104;
+	memadd = 0;
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX BGEZAL|  Branch on greater >=0 zero and link      | 4
+	//0000 01ss sss1 0001 iiii iiii iiii iiii
+
+	testId = mips_test_begin_test("bgezal");
+	err = mips_cpu_set_register(cpu, 1, 0x00000001);
+
+	instruction = 0x08003104; //32 jump
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 31, &got2));
+	}
+	passed = (err == mips_Success) && (got == 0x00000024)
+			&& (got2 == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("bgezal");
+	err = mips_cpu_set_register(cpu, 1, 0xF0000000);
+
+	instruction = 0x08003104; //32 jump
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+
+	passed = (err == mips_Success) && (got == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX BGTZ  |  Branch on greater than zero              | 3
+	//0001 11ss sss0 0000 iiii iiii iiii iiii
+
+	testId = mips_test_begin_test("bgtz");
+	err = mips_cpu_set_register(cpu, 1, 0x00000000);
+
+	instruction = 0x0800201C; //32 jump
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+
+	passed = (err == mips_Success) && (got == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("bgtz");
+	err = mips_cpu_set_register(cpu, 1, 0x00000034);
+
+	instruction = 0xFEFF201C; //32 jump
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 32;
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x0000001C);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+//XXX BLEZ  |  Branch on less than or equal to zero     | 3
+	//0001 10ss sss0 0000 iiii iiii iiii iiii
+
+	testId = mips_test_begin_test("blez");
+	err = mips_cpu_set_register(cpu, 1, 0xF0000000);
+
+	instruction = 0x08002018; //32 jump
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+
+	passed = (err == mips_Success) && (got == 0x000000024);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("blez");
+	err = mips_cpu_set_register(cpu, 1, 0x00230000);
+
+	memadd = 0;
+	instruction = 0x08002018; //32 jump
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+
+	passed = (err == mips_Success) && (got == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+//XXX BLTZ  |  Branch on less than zero                 | 3
+	//0000 01ss sss0 0000 iiii iiii iiii iiii
+	// 0 	4	2		0	0	0	0	8
+	testId = mips_test_begin_test("bltz");
+	err = mips_cpu_set_register(cpu, 1, 0x00000000);
+
+	instruction = 0x08002004; //32 jump
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+
+	passed = (err == mips_Success) && (got == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("bltz");
+	err = mips_cpu_set_register(cpu, 1, 0x80000300);
+
+	instruction = 0x08002004; //32 jump
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+
+	passed = (err == mips_Success) && (got == 0x00000024);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//BLTZAL|  Branch on less than zero and link        | 4
+	//0000 01ss sss1 0000 iiii iiii iiii iiii
+	//0000 0100 0011 0000 0000 0000 0000 1000
+	//   0    4    3    0    0    0    0    8
+	//   0    8    0    0    3    0    0    4
+
+	testId = mips_test_begin_test("bltzal");
+	err = mips_cpu_set_register(cpu, 1, 0xF0000300);
+
+	instruction = 0x08003004; //32 jump
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 31, &got2));
+	}
+	passed = (err == mips_Success) && (got == 0x00000024)
+			&& (got2 == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("bltzal");
+	err = mips_cpu_set_register(cpu, 1, 0x10000300);
+
+	instruction = 0x08003004; //32 jump
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+
+	passed = (err == mips_Success) && (got == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+//BNE   |  Branch on not equal                      | 3
+	//0001 01ss ssst tttt iiii iiii iiii iiii
+	//0001 0100 0010 0010 0000 0000 0000 1000
+	//   0    8
+
+	testId = mips_test_begin_test("bne");
+	err = mips_cpu_set_register(cpu, 1, 0x00010100);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 2, 0x00010100);
+	}
+
+	instruction = 0x08002214;
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("bne");
+	err = mips_cpu_set_register(cpu, 1, 0x00010000);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 2, 0x00010100);
+	}
+
+	instruction = 0x08002214;
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_pc(cpu, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x00000024);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+//XXX DIV   |  Divide                                   | 4
+	//0000 00ss ssst tttt 0000 0000 0001 1010
+	//0000 0001 0000 1001 0000 0000 0001 1010
+//+/-
+	testId = mips_test_begin_test("div");
+	err = mips_cpu_set_register(cpu, 8, 0x00000008);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0xFFFFFFFF);
+	}
+
+	//instruction = 0x0109001A; // div $10, $8, $9 // #8/#-1
+	instruction = 0x1A000901;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x10100000; //MFHI to register 2
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x12080000; //MFLO to register 1
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 8, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 1, &got2);
+	}
+	passed = (err == mips_Success) && (got == 0) && (got2 == 0xFFFFFFF8);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+	//+/+
+
+	testId = mips_test_begin_test("div");
+	err = mips_cpu_set_register(cpu, 8, 0x00000011);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00000002);
+	}
+
+	//instruction = 0x0109001A; // div $10, $8, $9 // #17/#2
+	instruction = 0x1A000901;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x10100000; //MFHI to register 2
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x12080000; //MFLO to register 1
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 8, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 1, &got2);
+	}
+	passed = (err == mips_Success) && (got == 1) && (got2 == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//-/-
+
+	testId = mips_test_begin_test("div");
+	err = mips_cpu_set_register(cpu, 8, 0xFFFFFFF8);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0xFFFFFFFD);
+	}
+
+	//instruction = 0x0109001A; // div $10, $8, $9 // #-8/-3
+	instruction = 0x1A000901;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x10100000; //MFHI to register 2
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x12080000; //MFLO to register 1
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 8, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 1, &got2);
+	}
+	passed = (err == mips_Success) && (got == -2) && (got2 == 2);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX DIVU  |  Divide unsigned                          | 3
+	//0000 00ss ssst tttt 0000 0000 0001 1011
+
+	testId = mips_test_begin_test("divu");
+	err = mips_cpu_set_register(cpu, 8, 0x00000008);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00000003);
+	}
+
+	//instruction = 0x0109001B; // divu $10, $8, $9 // #8/#3
+	instruction = 0x1B000901;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x10100000; //MFHI to register 2
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x12080000; //MFLO to register 1
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 8, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 1, &got2);
+	}
+	passed = (err == mips_Success) && (got == 0x2) && (got2 == 0x2);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("divu");
+	err = mips_cpu_set_register(cpu, 8, 0x88888888);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x44444444);
+	}
+
+	instruction = 0x1B000901;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x10100000; //MFHI to register 2
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x12080000; //MFLO to register 1
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 8, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 1, &got2);
+	}
+	passed = (err == mips_Success) && (got == 0x0) && (got2 == 0x2);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+//J     |  Jump                                     | 3
+	//0000 10ii iiii iiii iiii iiii iiii iiii
+
+	testId = mips_test_begin_test("j");
+	//0000 10ii iiii iiii iiii iiii iiii iiii
+	//0000 1000 0000 0000 0000 0000 0001 0000
+
+	// SET MEMORY FOR INSTRUCTIONS
+
+	instruction = 0x10000008; // LOAD MEM16 to PC
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	err = mips_cpu_get_pc(cpu, &got);
+
+	passed = (err == mips_Success) && (got == 0x00000040);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+//XXX JAL   |  Jump and link                            | 3
+	//0000 11ii iiii iiii iiii iiii iiii iiii
+	testId = mips_test_begin_test("jal");
+
+	//0000 11ii iiii iiii iiii iiii iiii iiii
+	//0000 1100 0000 0000 0000 0000 0001 0000
+
+	// SET MEMORY FOR INSTRUCTIONS
+	instruction = 0x1000000C; // LOAD MEM16 to PC
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	err = mips_cpu_get_pc(cpu, &got);
+	err = mips_cpu_get_register(cpu, 31, &got2);
+
+	passed = (err == mips_Success) && (got == 0x00000040)
+			&& (got2 == 0x00000008);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+// XXX JR    |  Jump register                            | 3
+	//0000 00ss sss0 0000 0000 0000 0000 1000
+	//0000 0000 0010 0000 0000 0000 0000 1000
+	testId = mips_test_begin_test("jr");
+
+	err = mips_cpu_set_register(cpu, 1, 0x00000020);
+
+	instruction = 0x08002000;
+	memadd = 0;
+	instruction2 = 0X00080100;  //SLL/NOP aka Null Operation
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction2);
+	}
+
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		errinc = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_pc(cpu, &got);
+	}
+
+	passed = (err == mips_Success) && (got == 0x00000020);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+//XXX LB    |  Load byte                                | 4
+	//1000 00ss ssst tttt iiii iiii iiii iiii
+	//1000 0000 0010 0010 0000 0000 0000 0001
+	testId = mips_test_begin_test("lb");
+	err = mips_cpu_set_register(cpu, 1, 0x00000008);
+
+	instruction = 0x01002280;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x12345678;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000008, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00000056);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//
+
+	testId = mips_test_begin_test("lb");
+	err = mips_cpu_set_register(cpu, 1, 0x00000008);
+
+	instruction = 0x02002280;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x12F3F578;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000008, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0xFFFFFFF3);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX LBU   |  Load byte unsigned                       | 3
+	//1010 00ss ssst tttt iiii iiii iiii iiii
+	//1001 0000 0010 0010 0000 0000 0000 0001
+	testId = mips_test_begin_test("lbu");
+	err = mips_cpu_set_register(cpu, 1, 0x00000008);
+
+	instruction = 0x01002290;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x12345678;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000008, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00000056);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+//XXX LUI   |  Load upper immediate                     | 2
+	//0011 11-- ---t tttt iiii iiii iiii iiii
+	//0011 1100 0000 0010 0000 0000 0000 1000
+	testId = mips_test_begin_test("lui");
+	err = mips_cpu_set_register(cpu, 1, 0x00000008);
+
+	instruction = 0x0800023C;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00080000);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+//XXX LW    |  Load word                                | 2
+	//1000 11ss ssst tttt iiii iiii iiii iiii
+	testId = mips_test_begin_test("lw");
+	err = mips_cpu_set_register(cpu, 1, 0x00000010);
+
+	instruction = 0x0000228C;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x10100000;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000010, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00001010);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//LWL   |  Load word left                           | 5
+	//1000 10ss ssst tttt iiii iiii iiii iiii
+	//1000 10ss ssst tttt iiii iiii iiii iiii
+	//ffff2388
+	// 8823ffff
+	// 1000 1000 0010 0011
+
+	testId = mips_test_begin_test("lwl");
+	err = mips_cpu_set_register(cpu, 1, 0x00000010);
+	err = mips_cpu_set_register(cpu, 2, 0x12345678);
+
+	instruction = 0x01002288; //Offset by 1
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x11223344;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000010, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x33221178);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+	testId = mips_test_begin_test("lwl");
+	err = mips_cpu_set_register(cpu, 1, 0x00000010);
+	err = mips_cpu_set_register(cpu, 2, 0x12345678);
+
+	instruction = 0x02002288; //Offset by 2
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x11223344;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000010, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x22115678);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+	testId = mips_test_begin_test("lwl");
+	err = mips_cpu_set_register(cpu, 1, 0x00000010);
+	err = mips_cpu_set_register(cpu, 2, 0x12345678);
+
+	instruction = 0x03002288; //Offset by 3
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x11223344;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000010, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x11345678);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+	testId = mips_test_begin_test("lwl");
+	err = mips_cpu_set_register(cpu, 1, 0x00000010);
+	err = mips_cpu_set_register(cpu, 2, 0x12345678);
+
+	instruction = 0x00002288; //Offset by 0
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x11223344;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000010, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x44332211);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	// Attempt to access a location that is outside of the defined memory in the test
+
+	testId = mips_test_begin_test("lwl");
+	err = mips_cpu_set_register(cpu, 1, 0x0FFFFFF4);
+	err = mips_cpu_set_register(cpu, 2, 0x12345678);
+
+	instruction = 0x00002288; //Offset by 0
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x11223344;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x0FFFFFF4, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_ExceptionInvalidAddress);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//LWR   |  Load word right                          | 5
+	//1001 10ss ssst tttt iiii iiii iiii iiii
+
+	testId = mips_test_begin_test("lwr");
+	err = mips_cpu_set_register(cpu, 1, 0x00000010);
+	err = mips_cpu_set_register(cpu, 2, 0x12345678);
+
+	instruction = 0x01002298; //Offset by 1
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x11223344;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000010, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x12344433);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+	testId = mips_test_begin_test("lwr");
+	err = mips_cpu_set_register(cpu, 1, 0x00000010);
+	err = mips_cpu_set_register(cpu, 2, 0x12345678);
+
+	instruction = 0x02002298; //Offset by 2
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x11223344;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000010, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x12443322);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+	testId = mips_test_begin_test("lwr");
+	err = mips_cpu_set_register(cpu, 1, 0x00000010);
+	err = mips_cpu_set_register(cpu, 2, 0x12345678);
+
+	instruction = 0x03002298; //Offset by 3
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x11223344;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000010, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x44332211);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+	testId = mips_test_begin_test("lwr");
+	err = mips_cpu_set_register(cpu, 1, 0x00000010);
+	err = mips_cpu_set_register(cpu, 2, 0x12345678);
+
+	instruction = 0x00002298; //Offset by 0
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x11223344;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000010, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x12345644);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	// Invalid Address Test
+
+	testId = mips_test_begin_test("lwr");
+	err = mips_cpu_set_register(cpu, 1, 0x0FFFFFF4);
+	err = mips_cpu_set_register(cpu, 2, 0x12345678);
+
+	instruction = 0x01002298; //Offset by 1
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x11223344;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x0FFFFFF4, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}	//Backwards
+	passed = (err == mips_ExceptionInvalidAddress);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX MFHI  |  Move from HI                             | 3
+	//0000 0000 0000 0000 dddd d000 0001 0000
+	//0000 0000 0000 0000 0001 0000 0001 0000
+
+	//10100000
+
+	//This is a lazy test as it does not use nested function to operate it and hence should be integrated with some multiply instructions
+	testId = mips_test_begin_test("mfhi");
+	err = mips_cpu_set_register(cpu, 33, 0x0000FFFF);
+	instruction = 0x10100000;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x0000FFFF);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX MFLO  |  Move from LO                             | 3
+	//0000 0000 0000 0000 dddd d000 0001 0010
+
+	//Same test failure as that with MFHI
+	//1201
+
+	testId = mips_test_begin_test("mflo");
+	err = mips_cpu_set_register(cpu, 32, 0x0000FFFF);
+	instruction = 0x12100000;
+
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x0000FFFF);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//MULT  |  Multiply                                 | 4
+	//0000 00ss ssst tttt 0000 0000 0001 1000
+	//0000 0001 0000 1001 0000 0000 0001 1000
+	//18 00 09 01
+
+	testId = mips_test_begin_test("mult");
+	err = mips_cpu_set_register(cpu, 8, 0x12345678);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x87654321);
+	}
+
+	instruction = 0x18000901;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x10100000; //MFHI to register 2
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x12080000; //MFLO to register 1
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 8, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 1, &got2);
+	}
+
+	passed = (err == mips_Success) && (got == 0xf76c768d)
+			&& (got2 == 0x70b88d78);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//Multiply by zero
+
+	testId = mips_test_begin_test("mult");
+	err = mips_cpu_set_register(cpu, 8, 0x12345678);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x0);
+	}
+
+	instruction = 0x18000901;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x10100000; //MFHI to register 2
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x12080000; //MFLO to register 1
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 8, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 1, &got2);
+	}
+	passed = (err == mips_Success) && (got == 0x0) && (got2 == 0x0);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//Nested Multiply Test
+
+	testId = mips_test_begin_test("mult");
+	err = mips_cpu_set_register(cpu, 8, 0x1);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x2);
+	}
+
+	instruction = 0x18000901;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x10100000; //MFHI to register 2
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x12080000; //MFLO to register 1
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 8, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 1, &got2);
+	}
+	passed = (err == mips_Success) && (got == 0x0) && (got2 == 0x2);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX MULTU |  Multiply unsigned                        | 3
+	//0000 00ss ssst tttt 0000 0000 0001 1001
+	//0000 0001 0000 1001 0000 0000 0001 1001
+	// 0	1	0		9	0 	0	1 		9
+
+	testId = mips_test_begin_test("multu");
+	err = mips_cpu_set_register(cpu, 8, 0x12345678);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x87654321);
+	}
+
+	instruction = 0x19000901;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x10100000; //MFHI to register 2
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x12080000; //MFLO to register 1
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 8, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 1, &got2);
+	}
+	passed = (err == mips_Success) && (got == 0x9a0cd05)
+			&& (got2 == 0x70b88d78);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	// Multiply by zero
+
+	testId = mips_test_begin_test("multu");
+	err = mips_cpu_set_register(cpu, 8, 0x12345678);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x0);
+	}
+
+	instruction = 0x19000901;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x10100000; //MFHI to register 2
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 4, 4, (uint8_t*) &instruction);
+	}
+	instruction = 0x12080000; //MFLO to register 1
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd + 8, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 2, &got);
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 1, &got2);
+	}
+	passed = (err == mips_Success) && (got == 0x0) && (got2 == 0x0);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX OR    |  Bitwise or                               | 1
+
+	testId = mips_test_begin_test("or");
+	err = mips_cpu_set_register(cpu, 8, 0x0000FFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00FFFF00);
+	}
+
+	instruction = 0x25500901; // //or $10, $8, $9
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x00FFFFFF);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+	testId = mips_test_begin_test("or");
+	err = mips_cpu_set_register(cpu, 8, 0xFFFFFFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00000000);
+	}
+
+	instruction = 0x25500901; // //or $10, $8, $9
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0xFFFFFFFF);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//ORI   |  Bitwise or immediate                     | 2
+	//0011 01ss ssst tttt iiii iiii iiii iiii
+	testId = mips_test_begin_test("ori");
+	err = mips_cpu_set_register(cpu, 1, 0x00001012);
+
+	instruction = 0x02002234;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00001012);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+	testId = mips_test_begin_test("ori");
+	err = mips_cpu_set_register(cpu, 1, 0x0001012);
+
+	instruction = 0x00F02234;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x0000F012);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//SB    |  Store byte                               | 3
+	//1010 00ss ssst tttt iiii iiii iiii iiii
+
+	testId = mips_test_begin_test("sb");
+	err = mips_cpu_set_register(cpu, 1, 0x00000008);
+	err = mips_cpu_set_register(cpu, 2, 0x11223344);
+
+	instruction = 0x010022A0; //Offset 1
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x12345678;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000008, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_mem_read(mem, 8, 4, (uint8_t*) &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x12344478);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+	testId = mips_test_begin_test("sb");
+	err = mips_cpu_set_register(cpu, 1, 0x00000008);
+	err = mips_cpu_set_register(cpu, 2, 0x11223344);
+
+	instruction = 0x020022A0; //Offset 2
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x12345678;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000008, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_mem_read(mem, 8, 4, (uint8_t*) &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x12445678);
+
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("sb");
+	err = mips_cpu_set_register(cpu, 1, 0x00000008);
+	err = mips_cpu_set_register(cpu, 2, 0x11223344);
+
+	instruction = 0x030022A0; //Offset 3
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x12345678;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000008, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_mem_read(mem, 8, 4, (uint8_t*) &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x44345678);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("sb");
+	err = mips_cpu_set_register(cpu, 1, 0x00000008);
+	err = mips_cpu_set_register(cpu, 2, 0x11223344);
+
+	instruction = 0x000022A0; //Offset 0
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x12345678;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000008, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_mem_read(mem, 8, 4, (uint8_t*) &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x12345644);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//SH    |  Store half-word                          | 3
+	////1010 01ss ssst tttt iiii iiii iiii iiii
+
+	testId = mips_test_begin_test("sh");
+	err = mips_cpu_set_register(cpu, 1, 0x00000008);
+	err = mips_cpu_set_register(cpu, 2, 0x11223344);
+
+	instruction = 0x020022A4;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x12345678;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000008, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_mem_read(mem, 8, 4, (uint8_t*) &got);
+	}	//Backwards
+
+	passed = (err == mips_Success) && (got == 0x44335678);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
 
 
-			mips_error e = mips_cpu_set_register(cpu_in, src1, src1_data);
-			e = mips_cpu_set_register(cpu_in, src2, src2_data);
-			e = mips_cpu_get_pc(cpu_in,&pc_bef);
-			pc_aft = pc_bef + pc_diff;
-			
-			uint32_t whole =
-				(src1 << 21) // srca = r4
-				|
-				(src2 << 16) // srcb = r5
-				|
-				(src3 << 11) // dst = r3
-				|
-				(shift << 6) // shift = 0
-				|
-				(function << 0);
-    
-			uint8_t buffer[4];
-			buffer[0]=(whole>>24)&0xFF;
-			buffer[1]=(whole>>16)&0xFF;
-			buffer[2]=(whole>>8)&0xFF;
-			buffer[3]=(whole>>0)&0xFF;
+	//Offset 0
 
-			e = mips_mem_write(
-				mem_in,	        //!< Handle to target memory
-				pc_bef,	            //!< Byte address to start transaction at
-				4,	            //!< Number of bytes to transfer
-				buffer	        //!< Receives the target bytes
-			);
-			
-			if(e!=mips_Success){
-				fprintf(stderr, "mips_cpu_step : failed.\n");
-				exit(1);
-			}
-		} else if (type == 2) {
-			src1 = src1_in;
-			src1_data = src1_data_in;
-			idata = src2_data_in;
-			src3 = src3_in;
-			src3_success_data = src3_success_data_in;
+	testId = mips_test_begin_test("sh");
+	err = mips_cpu_set_register(cpu, 1, 0x00000008);
+	err = mips_cpu_set_register(cpu, 2, 0x11223344);
+
+	instruction = 0x000022A4;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	temp = 0x12345678;
+	if (err == 0) {
+		err = mips_mem_write(mem, 0x00000008, 4, (uint8_t*) &temp);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_mem_read(mem, 8, 4, (uint8_t*) &got);
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x12344433);
 
 
-			mips_error e = mips_cpu_set_register(cpu_in, src1, src1_data);
-			e = mips_cpu_get_pc(cpu_in,&pc_bef);
-			pc_aft = pc_bef + pc_diff;
-			
-			uint32_t whole =
-				((opcode  & 0x2F) << 26)
-				|
-				((src1  & 0x1F) << 21)
-				|
-				((src3  & 0x1F) << 16) 
-				|
-				(idata & 0xFFFF);
-    
-			uint8_t buffer[4];
-			buffer[0]=(whole>>24)&0xFF;
-			buffer[1]=(whole>>16)&0xFF;
-			buffer[2]=(whole>>8)&0xFF;
-			buffer[3]=(whole>>0)&0xFF;
-			e = mips_mem_write(
-				mem_in,	        //!< Handle to target memory
-				pc_bef,	            //!< Byte address to start transaction at
-				4,	            //!< Number of bytes to transfer
-				buffer	        //!< Receives the target bytes
-			);
-			
-			if(e!=mips_Success){
-				fprintf(stderr, "mips_cpu_step : failed.\n");
-				exit(1);
-			}
+
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX SLL   |  Shift left logical                       | 2
+
+	testId = mips_test_begin_test("sll");
+	//XXX SLL                     | 1
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x10101010);
+	}
+	//instruction = 0x01095023; // //sll $10,
+	instruction = 0x80500900; //
+	memadd = 4;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x40404040);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("sll");
+
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x01010101);
+	}
+
+	// 0000 0000 000t tttt dddd dsss ss  00 0000
+	// 0000 0000 0000 1001 0101 0000 01//00 0000
+	//40500900
+	instruction = 0x40500900; //
+	memadd = 4;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x02020202);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("sll");
+
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x01010101);
+	}
+
+	// 0000 0000 000t tttt dddd dsss ss  00 0000
+	// 0000 0000 0000 1001 0101 0000 01//00 0000
+	//40500900
+
+	instruction = 0x00500900; //
+	memadd = 4;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0x01010101);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//SLLV  |  Shift left logical variable              | 3
+	//0000 00ss ssst tttt dddd d--- --00 0100
+	//0000 0000 0110 0010 0010 0000 0000 0100
+	//	0	0	6		2	2		0	0	4
+
+	testId = mips_test_begin_test("sllv");
+	err = mips_cpu_set_register(cpu, 2, 0x01010101);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 3, 0x00000001);
+	}
+	// 2<<3 into 4
+	instruction = 0x04206200;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 4, &got);
+	}
+
+	passed = (err == mips_Success) && (got == 0x02020202);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//SLT   |  Set on less than (signed)                | 2
+	//0000 00ss ssst tttt dddd d000 0010 1010
+	//0000 0000 0010 0010 0001 1000 0010 1010
+
+	testId = mips_test_begin_test("slt");
+	err = mips_cpu_set_register(cpu, 1, 0x0001FFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 2, 0x00F10000);
+	}
+
+	instruction = 0x2A182200; //
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 3, &got));
+	}
+	passed = (err == mips_Success) && (got == 1);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("slt");
+	err = mips_cpu_set_register(cpu, 2, 0x0001FFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 1, 0x00F10000);
+	}
+
+	instruction = 0x2A182200; // //addu $10, $8, $9
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 3, &got));
+	}
+	passed = (err == mips_Success) && (got == 0);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("slt");
+	err = mips_cpu_set_register(cpu, 1, 0x00000001);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 2, 0x00000001);
+	}
+
+	instruction = 0x2A182200; //
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 3, &got));
+	}
+	passed = (err == mips_Success) && (got == 0);
+	mips_test_end_test(testId, passed, NULL);
+
+	testId = mips_test_begin_test("slt");
+	err = mips_cpu_set_register(cpu, 1, 0xF001FFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 2, 0x00F10000);
+	}
+
+	instruction = 0x2A182200; //
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 3, &got));
+	}
+	passed = (err == mips_Success) && (got == 1);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+//SLTI  |  Set on less than immediate (signed)      | 3
+	//0010 10ss ssst tttt iiii iiii iiii iiii
+	//0010 1000 0010 0010 0000 0000 0000 0010
+	testId = mips_test_begin_test("slti");
+	err = mips_cpu_set_register(cpu, 1, 0x00000003);
+
+	instruction = 0x02002228;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00000000);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("slti");
+	err = mips_cpu_set_register(cpu, 1, 0x00000001);
+
+	instruction = 0x02002228;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00000001);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//SLTIU |  Set on less than immediate unsigned      | 3
+	//0010 11ss ssst tttt iiii iiii iiii iiii
+	testId = mips_test_begin_test("sltiu");
+	err = mips_cpu_set_register(cpu, 1, 0x00000003);
+
+	instruction = 0x02002228;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00000000);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("sltiu");
+	err = mips_cpu_set_register(cpu, 1, 0x00000001);
+
+	instruction = 0x02002228;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00000001);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//SLTU  |  Set on less than unsigned                | 1
+	//0000 00ss ssst tttt dddd d000 0010 1011
+
+	testId = mips_test_begin_test("sltu");
+	err = mips_cpu_set_register(cpu, 1, 0x0001FFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 2, 0x00F10000);
+	}
+
+	instruction = 0x2B182200; // //addu $10, $8, $9
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 3, &got));
+	}
+	passed = (err == mips_Success) && (got == 1);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	testId = mips_test_begin_test("sltu");
+	err = mips_cpu_set_register(cpu, 2, 0x0001FFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 1, 0x00F10000);
+	}
+
+	instruction = 0x2B182200; // //addu $10, $8, $9
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 3, &got));
+	}
+	passed = (err == mips_Success) && (got == 0);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+//XXX SRA   |  Shift right arithmetic                   | 2
+	//0000 00-- ---t tttt dddd dhhh hh00 0011
+	//0000 0000 0000 0010 0010 0000 0100 0011
+
+	testId = mips_test_begin_test("sra");
+	err = mips_cpu_set_register(cpu, 2, 0x02020202);
+	// 2<<3 into 4
+	instruction = 0x43200200;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 4, &got);
+	}
+
+	passed = (err == mips_Success) && (got == 0x01010101);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//0000 00-- ---t tttt dddd dhhh hh00 0011
+	//0000 0000 0000 0010 0010 0000 0100 0011
+	//Reg 2>>shift store in 4
+
+	testId = mips_test_begin_test("sra");
+	err = mips_cpu_set_register(cpu, 2, 0x82020202);
+	instruction = 0x43200200;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 4, &got);
+	}
+
+	passed = (err == mips_Success) && (got == 0xC1010101);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX SRL   |  Shift right logical                      | 2
+	//0000 00-- ---t tttt dddd dhhh hh00 0010
+	//0000 0000 0000 0010 0010 0000 0100 0010
+	//42200200
+	//2>>shift1 store in 4
+
+	testId = mips_test_begin_test("srl");
+	err = mips_cpu_set_register(cpu, 2, 0x02020202);
+	// 2<<3 into 4
+	instruction = 0x42200200;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 4, &got);
+	}
+
+	passed = (err == mips_Success) && (got == 0x01010101);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//0000 00-- ---t tttt dddd dhhh hh00 0010
+
+	testId = mips_test_begin_test("srl");
+	err = mips_cpu_set_register(cpu, 2, 0x82020202);
+	instruction = 0x42200200;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 4, &got);
+	}
+
+	passed = (err == mips_Success) && (got == 0x41010101);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+//XXX SRLV  |  Shift right logical variable             | 2
+	//0000 00ss ssst tttt dddd d000 0000 0110
+	//0000 0000 0110 0010 0010 0000 0000 0110
+	//06206200
+
+	testId = mips_test_begin_test("srlv");
+	err = mips_cpu_set_register(cpu, 2, 0x02020202);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 3, 0x00000001);
+	}
+	instruction = 0x06206200;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 4, &got);
+	}
+
+	passed = (err == mips_Success) && (got == 0x01010101);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//
+
+//XXX SUB   |  Subtract                                 | 2
+	//0000 00ss ssst tttt dddd d000 0010 0010
+	//0000 0001 0000 1001 0101 0000 0010 0010
+	//22500901
+
+	testId = mips_test_begin_test("sub");
+	err = mips_cpu_set_register(cpu, 8, 0x00000002);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00000001);
+	}
+
+	instruction = 0x22500901;
+	memadd = 8;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+		if (err == 0) {
+			err = mips_cpu_step(cpu);
+			//Implements the function
 		}
 	}
-	
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 10, &got);
+	}
 
-};
+	passed = (err == mips_Success) && (got == 0x00000001);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
 
-void basic_inst_test(test_instr instr, mips_cpu_h cpu_in, mips_error test_error_in) {
-	
-	int testId = mips_test_begin_test(instr.name.c_str());  
-	mips_error test_error;
-	mips_error e = mips_cpu_step(cpu_in);
-	test_error = e;
-	e = mips_Success;
-	uint32_t got;
-	uint32_t pc_new;
-	e = mips_cpu_get_register(cpu_in, instr.src3, &got);
-	e = mips_cpu_get_pc(cpu_in,&pc_new);
+	//
 
-	int passed;
-	
-	cout << instr.name << " " << pc_new<< endl;
-	if (test_error_in != mips_Success) {
-		if (test_error == test_error_in) {
-			if (instr.pc_aft == pc_new) {
-				e = mips_cpu_reset(cpu_in);
-				if (e != mips_Success) {
-					cout << "ERROR" << endl;
-				}
-				passed = 1;
-			}
-		} else if (test_error == mips_Success) {
-			cout << "BAD SUCCESS" << endl;
-			passed = 0;
-		} else {
-			fprintf(stderr, "mips_cpu_step : failed.\n");
-			exit(1);
+	//Positive - Negative
+	testId = mips_test_begin_test("sub");
+	err = mips_cpu_set_register(cpu, 8, 0x00000002);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0xFFFFFFFF);
+	}
+
+	instruction = 0x22500901;
+	memadd = 8;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+		if (err == 0) {
+			err = mips_cpu_step(cpu);
+			//Implements the function
 		}
-	} else if (got == instr.src3_success_data && instr.pc_aft == pc_new) {
-		passed = 1;
-	} else {
-		passed = 0;
-		cout << instr.name << " failed, with pc " << pc_new << " and "  << " which shouldve been "  << instr.pc_aft << endl;
-		cout << instr.name << " failed, with inputs " << hex << instr.src1_data << " and " << hex << instr.idata << " and output " << hex << got << endl;
 	}
-	
-	if(e!=mips_Success){
-		fprintf(stderr, "mips_cpu : failed.\n");
-		exit(1);
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 10, &got);
 	}
-	
-    stringstream ss;
-	ss << instr.name << "failed, with inputs " << instr.src1_data << " and  " << instr.src2_data << endl;
-	
-	mips_test_end_test(testId, passed, ss.str().c_str());
-}
 
-void lw_test(test_instr instr, mips_cpu_h cpu_in, mips_mem_h mem_in, mips_error test_error_in) {
-	
-	int testId = mips_test_begin_test(instr.name.c_str());  
-	mips_error test_error;
-	uint32_t word = instr.src3_success_data;
-	
-	uint8_t buffer[4];
-	buffer[0]=(word>>24)&0xFF;
-	buffer[1]=(word>>16)&0xFF;
-	buffer[2]=(word>>8)&0xFF;
-	buffer[3]=(word>>0)&0xFF;
-	mips_error e = mips_mem_write(
-		mem_in,	        //!< Handle to target memory
-		instr.src3,	            //!< Byte address to start transaction at
-		4,	            //!< Number of bytes to transfer
-		buffer	        //!< Receives the target bytes
-	);
-	
-	e = mips_cpu_step(cpu_in);
-	test_error = e;
-	e = mips_Success;
-	uint32_t got;
-	uint32_t pc_new;
-	e = mips_cpu_get_register(cpu_in, instr.src3, &got);
-	e = mips_cpu_get_pc(cpu_in,&pc_new);
+	passed = (err == mips_Success) && (got == 0x00000003);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
 
-	int passed;
+	//Negative minus Positive
 
+	testId = mips_test_begin_test("sub");
+	err = mips_cpu_set_register(cpu, 8, 0xFFFFFFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00000001);
+	}
 
-			
-	cout << instr.name << " " << pc_new<< endl;
-	if (test_error_in != mips_Success) {
-		if (test_error == test_error_in) {
-			if (instr.pc_aft == pc_new) {
-				e = mips_cpu_reset(cpu_in);
-				if (e != mips_Success) {
-					cout << "ERROR" << endl;
-				}
-				passed = 1;
-			}
-		} else if (test_error == mips_Success) {
-			cout << "BAD SUCCESS" << endl;
-			passed = 0;
-		} else {
-			fprintf(stderr, "mips_cpu_step : failed.\n");
-			exit(1);
+	instruction = 0x22500901;
+	memadd = 8;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+		if (err == 0) {
+			err = mips_cpu_step(cpu);
+			//Implements the function
 		}
-	} else if (got == instr.src3_success_data && instr.pc_aft == pc_new) {
-		passed = 1;
-	} else {
-		passed = 0;
-		cout << instr.name << " failed, with pc " << pc_new << " and "  << " which shouldve been "  << instr.pc_aft << endl;
-		cout << instr.name << " failed, with inputs " << hex << instr.src1_data << " and " << hex << instr.idata << " and output " << hex << got << endl;
 	}
-	
-	if(e!=mips_Success){
-		fprintf(stderr, "mips_cpu : failed.\n");
-		exit(1);
-	}
-	
-    stringstream ss;
-	ss << instr.name << "failed, with inputs " << instr.src1_data << " and  " << instr.idata << endl;
-	
-	mips_test_end_test(testId, passed, ss.str().c_str());
-}
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 10, &got);
 
-void sw_test(test_instr instr, mips_cpu_h cpu_in, mips_mem_h mem_in, mips_error test_error_in) {
-	
-	int testId = mips_test_begin_test(instr.name.c_str());  
-	mips_error test_error;
-	mips_error e = mips_cpu_set_register(cpu_in, instr.src3, instr.src3_success_data);
-	if(e!=mips_Success){
-		fprintf(stderr, "mips_cpu : failed.\n");
-		exit(1);
 	}
-	e = mips_cpu_step(cpu_in);
-	test_error = e;
-	e = mips_Success;
-	uint32_t pc_new;
-	
-	e = mips_cpu_get_pc(cpu_in,&pc_new);
-	
-	int passed;
 
-	if(e!=mips_Success){
-		
-		fprintf(stderr, "mips_cpu : failed.\n");
-		exit(1);
+	passed = (err == mips_Success) && (got == 0xFFFFFFFE);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+	//Overflow Positive
+
+	testId = mips_test_begin_test("sub");
+	err = mips_cpu_set_register(cpu, 8, 0x7FFFFFFF); //Largest Positive Number
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x80000001); //Second Larger Negative Number
 	}
-	
-	
-	uint8_t buffer[4];
-	e = mips_mem_read(
-		mem_in,	        //!< Handle to target memory
-		instr.src3,	            //!< Byte address to start transaction at
-		4,	            //!< Number of bytes to transfer
-		buffer	        //!< Receives the target bytes
-	);
-	if(e!=mips_Success){
-		cout << "ARGH" << endl;
-		fprintf(stderr, "mips_cpu : failed.\n");
-		exit(1);
+
+	instruction = 0x22500901;
+	memadd = 8;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
 	}
-	
-	uint32_t got = 
-        (((uint32_t)buffer[0])<<24)
-        |
-        (((uint32_t)buffer[1])<<16)
-        |
-        (((uint32_t)buffer[2])<<8)
-        |
-        (((uint32_t)buffer[3])<<0);
-			
-	cout << instr.name << " " << pc_new<< endl;
-	if (test_error_in != mips_Success) {
-		if (test_error == test_error_in) {
-			if (instr.pc_aft == pc_new) {
-				e = mips_cpu_reset(cpu_in);
-				if(e!=mips_Success){
-					fprintf(stderr, "mips_cpu : failed.\n");
-					exit(1);
-				}
-				passed = 1;
-			}
-		} else if (test_error == mips_Success) {
-			cout << "BAD SUCCESS" << endl;
-			passed = 0;
-		} else {
-			fprintf(stderr, "mips_cpu_step : failed.\n");
-			exit(1);
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+		if (err == 0) {
+			err = mips_cpu_step(cpu);
+			//Implements the function
 		}
-	} else if (got == instr.src3_success_data && instr.pc_aft == pc_new) {
-		passed = 1;
-	} else {
-		passed = 0;
-		cout << instr.name << " failed, with pc " << pc_new << " and "  << " which shouldve been "  << instr.pc_aft << endl;
-		cout << instr.name << " failed, with inputs " << hex << instr.src1_data << " and " << hex << instr.idata << " and output " << hex << got << endl;
 	}
-	
+	if (err == 0) {
+		err = mips_cpu_get_register(cpu, 10, &got);
+	}
 
-    stringstream ss;
-	ss << instr.name << "failed, with inputs " << instr.src1_data << " and  " << instr.idata << endl;
-	
-	mips_test_end_test(testId, passed, ss.str().c_str());
-}
+	passed = (err == mips_ExceptionArithmeticOverflow);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+	//
+//XXX SUBU  |  Subtract unsigned                        | 1
 
+	//Basic Arithmetic Test
+	testId = mips_test_begin_test("subu");
+	err = mips_cpu_set_register(cpu, 8, 0xF000FFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x0000FFFF);
+	}
+	// 0000 0001 0000 1001 0101 0000 0010 0011
+	//instruction = 0x01095023; // //SUBU $10, $9, 4
+	instruction = 0x23500901;
+	memadd = 4;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
 
-int main()
-{
-    mips_mem_h mem=mips_mem_create_ram(4096, 4);
-    
-    mips_cpu_h cpu=mips_cpu_create(mem);
-    
-    mips_error e = mips_cpu_set_debug_level(cpu, DEBUG_LEVEL, stderr);
-    if(e != mips_Success){
-        fprintf(stderr, "mips_cpu_set_debug_level : failed.\n");
-        exit(1);
-    }
-    
-    
-    mips_test_begin_suite();
-	
-	//ADDU
-	test_instr addu1(4, "addu", 10, 0xFFFFFFFF, 4, 0xFFFFFFFF, 31, 0xFFFFFFFE, cpu, mem);
-	basic_inst_test(addu1, cpu,  mips_Success);
-	
-	test_instr addu2(4, "addu", 0, 0x01, 2, 0x1111111, 3, 0x1111111, cpu, mem);
-	basic_inst_test(addu2, cpu,  mips_Success);
-	
-	test_instr addu3(4, "addu", 4, 0x5555555, 2, 0x5555555, 0, 0x00, cpu, mem);
-	basic_inst_test(addu3, cpu,  mips_Success);
-	
-	//AND
-	test_instr and1(4, "and", 10, 0xF0F0F0F0, 4, 0x0000FFFF, 31, 0x0000F0F0, cpu, mem);
-	basic_inst_test(and1, cpu,  mips_Success);
-	
-	test_instr and2(4, "and", 0, 0x01, 2, 0x1111111, 3, 0x0, cpu, mem);
-	basic_inst_test(and2, cpu,  mips_Success);
-	
-	test_instr and3(4, "and", 4, 0x6666666, 2, 0x6666666, 0, 0x00, cpu, mem);
-	basic_inst_test(and3, cpu,  mips_Success);
-	
-	//OR
-	test_instr or1(4, "or", 10, 0xF0F0F0F0, 4, 0x0000FFFF, 31, 0xF0F0FFFF, cpu, mem);
-	basic_inst_test(or1, cpu,  mips_Success);
-	
-	test_instr or2(4, "or", 0, 0xFFFFFFFF, 2, 0xF0F0F0F0, 3, 0xF0F0F0F0, cpu, mem);
-	basic_inst_test(or2, cpu,  mips_Success);
-	
-	test_instr or3(4, "or", 4, 0x6666666, 2, 0x6666666, 0, 0x00, cpu, mem);
-	basic_inst_test(or3, cpu,  mips_Success);
-	
-	//XOR
-	test_instr xor1(4, "xor", 10, 0xF0F0F0F0, 4, 0x0000FFFF, 31, 0xf0f00f0f, cpu, mem);
-	basic_inst_test(xor1, cpu,  mips_Success);
-	
-	test_instr xor2(4, "xor", 0, 0xFFFFFFFF, 2, 0xFFFFFFFF, 3, 0xFFFFFFFF, cpu, mem);
-	basic_inst_test(xor2, cpu,  mips_Success);
-	
-	test_instr xor3(4, "xor", 4, 0x6666666, 2, 0x6666666, 0, 0x00, cpu, mem);
-	basic_inst_test(xor3, cpu,  mips_Success);
-	
-	//SUBU
-	test_instr subu1(4, "subu", 10, 0x0000FFFF, 4, 0xFFFFFFFF, 31, 0x00010000, cpu, mem);
-	basic_inst_test(subu1, cpu,  mips_Success);
-	
-	test_instr subu2(4, "subu", 0, 0xFFFFFFFF, 2, 0xFFFFFFFF, 3, 0x1, cpu, mem);
-	basic_inst_test(subu2, cpu,  mips_Success);
-	
-	test_instr subu3(4, "subu", 4, 0x6666666, 2, 0x6666666, 0, 0x00, cpu, mem);
-	basic_inst_test(subu3, cpu,  mips_Success);
-	
-	//SLTU
-	test_instr sltu1(4, "sltu", 10, 0x0000FFFF, 4, 0xFFFFFFFF, 31, 0x01, cpu, mem);
-	basic_inst_test(sltu1, cpu,  mips_Success);
-	
-	test_instr sltu2(4, "sltu", 28, 0xFFFFFFFF, 2, 0x0000FFFF, 3, 0x00, cpu, mem);
-	basic_inst_test(sltu2, cpu,  mips_Success);
-	
-	test_instr sltu3(4, "sltu", 4, 0xFFFFFFFF, 2, 0xFFFFFFFF, 5, 0x00, cpu, mem);
-	basic_inst_test(sltu3, cpu,  mips_Success);
-	
-	test_instr sltu4(4, "sltu", 0, 0x6666666, 5, 0x6666666, 5, 0x01, cpu, mem);
-	basic_inst_test(sltu4, cpu,  mips_Success);
-	
-	test_instr sltu5(4, "sltu", 4, 0x0000FFFF, 2, 0xFFFFFFFF, 0, 0x00, cpu, mem);
-	basic_inst_test(sltu5, cpu,  mips_Success);
-	
-	//SLL
-	test_instr sll1(4, "sll", 0x04, 0x00, 4, 0xFFFFFFFF, 31, 0xFFFFFFF0, cpu, mem);
-	basic_inst_test(sll1, cpu,  mips_Success);
-	
-	test_instr sll2(4, "sll", 0x04, 0x00, 0, 0xFFFFFFFF, 31, 0x00, cpu, mem);
-	basic_inst_test(sll2, cpu,  mips_Success);
-	
-	test_instr sll3(4, "sll", 0x04, 0x00, 4, 0xFFFFFFFF, 0, 0x00, cpu, mem);
-	basic_inst_test(sll3, cpu,  mips_Success);
-	
-	//SRL
-	test_instr srl1(4, "srl", 0x04, 0x00, 4, 0xFFFFFFFF, 31, 0x0FFFFFFF, cpu, mem);
-	basic_inst_test(srl1, cpu,  mips_Success);
-	
-	test_instr srl2(4, "srl", 0x04, 0x00, 0, 0xFFFFFFFF, 31, 0x00, cpu, mem);
-	basic_inst_test(srl2, cpu,  mips_Success);
-	
-	test_instr srl3(4, "srl", 0x04, 0x00, 4, 0xFFFFFFFF, 0, 0x00, cpu, mem);
-	basic_inst_test(srl3, cpu,  mips_Success);
-	
-	//SRA
-	test_instr sra1(4, "sra", 0x04, 0x00, 4, 0xF00000FF, 31, 0xFF00000F, cpu, mem);
-	basic_inst_test(sra1, cpu,  mips_Success);
-	
-	test_instr sra2(4, "sra", 0x08, 0x00, 4, 0x000000FFF, 31, 0x0000000F, cpu, mem);
-	basic_inst_test(sra2, cpu,  mips_Success);
-	
-	test_instr sra3(4, "sra", 0x04, 0x00, 0, 0xFFFFFFFF, 31, 0x00, cpu, mem);
-	basic_inst_test(sra3, cpu,  mips_Success);
-	
-	test_instr sra4(4, "sra", 0x04, 0x00, 4, 0xFFFFFFFF, 0, 0x00, cpu, mem);
-	basic_inst_test(sra4, cpu,  mips_Success);
-	
-	//SRAV
-	test_instr srav1(4, "srav", 4, 0x04, 5, 0xF00000FF, 31, 0xFF00000F, cpu, mem);
-	basic_inst_test(srav1, cpu,  mips_Success);
-	
-	test_instr srav2(4, "srav", 7, 0x08, 6, 0x000000FFF, 31, 0x0000000F, cpu, mem);
-	basic_inst_test(srav2, cpu,  mips_Success);
-	
-	test_instr srav3(4, "srav", 0, 0x04, 5, 0x01, 31, 0x01, cpu, mem);
-	basic_inst_test(srav3, cpu,  mips_Success);
-	
-	test_instr srav4(4, "srav", 4, 0x04, 4, 0xFFFFFFFF, 0, 0x00, cpu, mem);
-	basic_inst_test(srav4, cpu,  mips_Success);
-	
-	//SLLV
-	test_instr sllv1(4, "sllv", 4, 0xFFFFFFFF, 10, 0x11111111, 31, 0x80000000, cpu, mem);
-	basic_inst_test(sllv1, cpu,  mips_Success);
-	
-	test_instr sllv2(4, "sllv", 0, 0xFFFFFFFF, 3, 0xFFFFFFFF, 31, 0xFFFFFFFF, cpu, mem);
-	basic_inst_test(sllv2, cpu,  mips_Success);
-	
-	test_instr sllv3(4, "sllv", 4, 0xFFFFFFFF, 5, 0x11111111, 0, 0x00, cpu, mem);
-	basic_inst_test(sllv3, cpu,  mips_Success);
-	
-	//SRLV
-	test_instr srlv1(4, "srlv", 4, 0x04, 10, 0xFFFFFFFF, 31, 0x0FFFFFFF, cpu, mem);
-	basic_inst_test(srlv1, cpu,  mips_Success);
-	
-	test_instr srlv2(4, "srlv", 0, 0xFFFFFFFF, 3, 0xFFFFFFFF, 31, 0xFFFFFFFF, cpu, mem);
-	basic_inst_test(srlv2, cpu,  mips_Success);
-	
-	test_instr srlv3(4, "srlv", 4, 0xFFFFFFFF, 5, 0x11111111, 0, 0x00, cpu, mem);
-	basic_inst_test(srlv3, cpu,  mips_Success);
-	
-	//XORI
-	test_instr xori1(4, "xori", 10, 0xF0F0F0F0, 0, 0xFFFF, 31, 0xf0f00f0f, cpu, mem);
-	basic_inst_test(xori1, cpu,  mips_Success);
-	
-	test_instr xori2(4, "xori", 0, 0xFFFFFFFF, 0, 0xFFFF, 3, 0x0000FFFF, cpu, mem);
-	basic_inst_test(xori2, cpu,  mips_Success);
-	
-	test_instr xori3(4, "xori", 4, 0x6666666, 0, 0x6666, 0, 0x00, cpu, mem);
-	basic_inst_test(xori3, cpu,  mips_Success);
-	
-	//ADDIU
-	test_instr addiu1(4, "addiu", 10, 0xFFFFFFFF, 0, 0xFFFF, 31, 0xFFFFFFFE, cpu, mem);
-	basic_inst_test(addiu1, cpu,  mips_Success);
-	
-	test_instr addiu2(4, "addiu", 10, 0xFFFFFFFF, 0, 0x7FFF, 31, 0x00007ffe, cpu, mem);
-	basic_inst_test(addiu2, cpu,  mips_Success);
-	
-	test_instr addiu3(4, "addiu", 0, 0x01, 0, 0x1111, 3, 0x1111, cpu, mem);
-	basic_inst_test(addiu3, cpu,  mips_Success);
-	
-	test_instr addiu4(4, "addiu", 4, 0x5555555, 0, 0x5555, 0, 0x00, cpu, mem);
-	basic_inst_test(addiu4, cpu,  mips_Success);
-	
-	//ANDI
-	test_instr andi1(4, "andi", 10, 0xF0F0F0F0, 0, 0xFFFF, 31, 0x0000F0F0, cpu, mem);
-	basic_inst_test(andi1, cpu,  mips_Success);
-	
-	test_instr andi2(4, "andi", 0, 0x01, 0, 0x1111, 3, 0x0, cpu, mem);
-	basic_inst_test(andi2, cpu,  mips_Success);
-	
-	test_instr andi3(4, "andi", 4, 0x6666666, 0, 0x6666, 0, 0x00, cpu, mem);
-	basic_inst_test(andi3, cpu,  mips_Success);
-	
-	//ORI
-	test_instr ori1(4, "ori", 10, 0xF0F0F0F0, 0, 0xFFFF, 31, 0xF0F0FFFF, cpu, mem);
-	basic_inst_test(ori1, cpu,  mips_Success);
-	
-	test_instr ori2(4, "ori", 0, 0xFFFFFFFF, 0, 0xF0F0, 3, 0x0000F0F0, cpu, mem);
-	basic_inst_test(ori2, cpu,  mips_Success);
-	
-	test_instr ori3(4, "ori", 4, 0x6666666, 0, 0x6666, 0, 0x00, cpu, mem);
-	basic_inst_test(ori3, cpu,  mips_Success);
-	
-	//sltiu
-	test_instr sltiu1(4, "sltiu", 10, 0x0000FFFF, 0, 0xFFFF, 31, 0x01, cpu, mem);
-	basic_inst_test(sltiu1, cpu,  mips_Success);
-	
-	test_instr sltiu2(4, "sltiu", 28, 0xFFFF, 0, 0x7FFF, 3, 0x00, cpu, mem);
-	basic_inst_test(sltiu2, cpu,  mips_Success);
-	
-	test_instr sltiu3(4, "sltiu", 28, 0xFFFFFFFF, 0, 0xFFFF, 3, 0x00, cpu, mem);
-	basic_inst_test(sltiu3, cpu,  mips_Success);
-	
-	test_instr sltiu4(4, "sltiu", 0, 0xFFFFFFFF, 0, 0x0001, 5, 0x01, cpu, mem);
-	basic_inst_test(sltiu4, cpu,  mips_Success);
-	
-	test_instr sltiu5(4, "sltiu", 4, 0x0000FFFF, 0, 0xFFFF, 0, 0x00, cpu, mem);
-	basic_inst_test(sltiu5, cpu,  mips_Success);
-    
-	//ADD
-	test_instr add1(0, "add", 4, 0x7FFFFFFF, 5, 0x7FFFFFFF, 6, 0x00, cpu, mem);
-	basic_inst_test(add1, cpu,  mips_ExceptionArithmeticOverflow);	
-	
-	test_instr add2(0, "add", 4, 0x80000000, 5, 0x80000000, 6, 0x00, cpu, mem);
-	basic_inst_test(add2, cpu,  mips_ExceptionArithmeticOverflow);
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0xF0000000);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
 
-	test_instr add3(4, "add", 4, 0xFFFFFFFF, 5, 0x2, 6, 0x01, cpu, mem);
-	basic_inst_test(add3, cpu,  mips_Success);
-	
-	test_instr add4(4, "add", 0, 0x01, 2, 0x1111111, 3, 0x1111111, cpu, mem);
-	basic_inst_test(add4, cpu,  mips_Success);
-	
-	test_instr add5(4, "add", 4, 0x5555555, 2, 0x5555555, 0, 0x00, cpu, mem);
-	basic_inst_test(add5, cpu,  mips_Success);
-	
-	//SUBU
-	test_instr sub1(0, "sub", 10, 0x80000000, 4, 0x01, 31, 0x00, cpu, mem);
-	basic_inst_test(sub1, cpu,  mips_ExceptionArithmeticOverflow);
-	
-	test_instr sub2(0, "sub", 4, 0x7FFFFFFF, 2, 0xFFFFFFFF, 3, 0x00, cpu, mem);
-	basic_inst_test(sub2, cpu,  mips_ExceptionArithmeticOverflow);
-	
-	test_instr sub3(4, "sub", 4, 0x02, 2, 0x01, 3, 0x01, cpu, mem);
-	basic_inst_test(sub3, cpu,  mips_Success);
-	
-	test_instr sub4(4, "sub", 5, 0x01, 8, 0xFFFFFFFF, 11, 0x02, cpu, mem);
-	basic_inst_test(sub4, cpu,  mips_Success);
-	
-	test_instr sub5(4, "sub", 6, 0xFFFFFFFF, 9, 0x01, 12, 0xFFFFFFFE, cpu, mem);
-	basic_inst_test(sub5, cpu,  mips_Success);
-	
-	test_instr sub6(4, "sub", 7, 0xFFFFFFFE, 10, 0xFFFFFFFF, 13, 0xFFFFFFFF, cpu, mem);
-	basic_inst_test(sub6, cpu,  mips_Success);
-	
-	test_instr sub7(4, "sub", 15, 0xF, 0, 0xFFFFFFFF, 16, 0xF, cpu, mem);
-	basic_inst_test(sub7, cpu,  mips_Success);
-	
-	test_instr sub8(4, "sub", 17, 0xFFFFFFFE, 10, 0xFFFFFFFF, 0, 0x00, cpu, mem);
-	basic_inst_test(sub8, cpu,  mips_Success);
-	
-	//SLT
-	test_instr slt1(4, "slt", 10, 0x01, 4, 0x80000000, 31, 0x00, cpu, mem);
-	basic_inst_test(slt1, cpu,  mips_Success);
-	
-	test_instr slt2(4, "slt", 28, 0xFFFFFFFF, 2, 0x01, 3, 0x01, cpu, mem);
-	basic_inst_test(slt2, cpu,  mips_Success);
-	
-	test_instr slt3(4, "slt", 4, 0x01, 2, 0xFFFFFFFF, 5, 0x00, cpu, mem);
-	basic_inst_test(slt3, cpu,  mips_Success);
-	
-	test_instr slt4(4, "slt", 7, 0xFFFFFFFF, 5, 0xFFFFFFFE, 5, 0x00, cpu, mem);
-	basic_inst_test(slt4, cpu,  mips_Success);
-	
-	test_instr slt5(4, "slt", 10, 0x01, 1, 0x01, 5, 0x00, cpu, mem);
-	basic_inst_test(slt5, cpu,  mips_Success);
-	
-	test_instr slt6(4, "slt", 2, 0x0, 0, 0x2, 12, 0x00, cpu, mem);
-	basic_inst_test(slt6, cpu,  mips_Success);
-	
-	test_instr slt7(4, "slt", 5, 0x0, 11, 0x2, 0, 0x00, cpu, mem);
-	basic_inst_test(slt7, cpu,  mips_Success);
-	
-	//SLTI
-	
-	test_instr slti1(4, "slti", 7, 0xFFFFFFFF, 0, 0x7FFE, 5, 0x01, cpu, mem);
-	basic_inst_test(slti1, cpu,  mips_Success);
-	
-	test_instr slti2(4, "slti", 28, 0xFFFFFFFF, 0, 0x01, 3, 0x01, cpu, mem);
-	basic_inst_test(slti2, cpu,  mips_Success);
-	
-	test_instr slti3(4, "slti", 4, 0x01, 0, 0xFFFF, 5, 0x00, cpu, mem);
-	basic_inst_test(slti3, cpu,  mips_Success);
-	
-	test_instr slti4(4, "slti", 7, 0xFFFFFFFF, 0, 0xFFFE, 5, 0x00, cpu, mem);
-	basic_inst_test(slti4, cpu,  mips_Success);
-	
-	test_instr slti5(4, "slti", 10, 0x01, 0, 0x01, 5, 0x00, cpu, mem);
-	basic_inst_test(slti5, cpu,  mips_Success);
-	
-	test_instr slti6(4, "slti", 0, 0x2, 0, 0x2, 12, 0x01, cpu, mem);
-	basic_inst_test(slti6, cpu,  mips_Success);
-	
-	test_instr slti7(4, "slti", 5, 0x0, 0, 0x2, 0, 0x00, cpu, mem);
-	basic_inst_test(slti7, cpu,  mips_Success);
-	
-	//ADDI
-	
-	test_instr addi1(0, "addi", 4, 0x7FFFFFFF, 10, 0x7FFF, 3, 0x00, cpu, mem);
-	basic_inst_test(addi1, cpu,  mips_ExceptionArithmeticOverflow);
-	
-	test_instr addi2(0, "addi", 4, 0x80000000, 0, 0xFFFF, 6, 0x00, cpu, mem);
-	basic_inst_test(addi2, cpu,  mips_ExceptionArithmeticOverflow);
-	
-	test_instr addi3(4, "addi", 4, 0xFFFFFFFF, 0, 0x2, 6, 0x01, cpu, mem);
-	basic_inst_test(addi3, cpu,  mips_Success);
-	
-	test_instr addi4(4, "addi", 0, 0x01, 0, 0x1111, 3, 0x1111, cpu, mem);
-	basic_inst_test(addi4, cpu,  mips_Success);
-	
-	test_instr addi5(4, "addi", 4, 0x5555555, 0, 0x5555, 0, 0x00, cpu, mem);
-	basic_inst_test(addi5, cpu,  mips_Success);
-	
-	test_instr addi6(4, "addi", 4, 0x7FFFFFFF, 0, 0xFFFF, 3, 0x7FFFFFFE, cpu, mem);
-	basic_inst_test(addi6, cpu,  mips_Success);
-	
-	test_instr addi7(4, "addi", 4, 0xF0000000, 0, 0x7FFF, 6, 0xF0007FFF, cpu, mem);
-	basic_inst_test(addi7, cpu,  mips_Success);
-	
-	//LUI
-	test_instr lui1(4, "lui", 0, 0x00, 0, 0xFFFF, 6, 0xFFFF0000, cpu, mem);
-	basic_inst_test(lui1, cpu,  mips_Success);
-	
-	//LW
-	test_instr lw1(4, "lw", 2, 0x4, 0, 0x04, 8, 0x12345678, cpu, mem);
-	lw_test(lw1, cpu, mem, mips_Success);
-	
-	test_instr lw2(0, "lw", 2, 0x4, 0, 0x02, 6, 0x12345678, cpu, mem);
-	lw_test(lw2, cpu, mem, mips_ExceptionInvalidAlignment);
-	
-	test_instr lw3(4, "lw", 2, 0x5, 0, 0xFFFFFFFF, 4, 0x12345678, cpu, mem);
-	lw_test(lw3, cpu, mem, mips_Success);
-	
-	//SW
-	test_instr sw1(4, "sw", 2, 0x4, 0, 0x04, 8, 0x12345678, cpu, mem);
-	sw_test(sw1, cpu, mem, mips_Success);
-	
-	test_instr sw2(0, "sw", 2, 0x4, 0, 0x02, 4, 0x12345678, cpu, mem);
-	sw_test(sw2, cpu, mem, mips_ExceptionInvalidAlignment);
-	
-	test_instr sw3(4, "sw", 2, 0x5, 0, 0xFFFFFFFF, 4, 0x12345678, cpu, mem);
-	sw_test(sw3, cpu, mem, mips_Success);
-	
-	
-	
+	//
+
+	//Rollover test
+	testId = mips_test_begin_test("subu");
+	err = mips_cpu_set_register(cpu, 8, 0x00000000);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00000001);
+	}
+	//instruction = 0x01095100; // //SLL $10, $9, 4
+	instruction = 0x23500901;
+	memadd = 4;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0xFFFFFFFF);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//SW    |  Store word                               | 2
+	//1010 11ss ssst tttt iiii iiii iiii iiii
+	//1010 1100 0010 0010 0000 0000 0000 0000
+
+	testId = mips_test_begin_test("sw");
+	err = mips_cpu_set_register(cpu, 1, 0x00000010);
+	err = mips_cpu_set_register(cpu, 2, 0x00000024);
+
+	instruction = 0x000022AC;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_mem_read(mem, 0x10, 4, (uint8_t*) &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x24000000);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
+//XXX XOR   |  Bitwise exclusive or                     | 1
+	testId = mips_test_begin_test("xor");
+	err = mips_cpu_set_register(cpu, 8, 0xF000FFFF);
+	if (err == 0) {
+		err = mips_cpu_set_register(cpu, 9, 0x00000F00);
+	}
+	/*Operation: $d = $s & $t; advance_pc (4);
+	 Syntax: and $d, $s, $t
+	 General Encoding: 0000 00ss ssst tttt dddd d000 0010 0101
+	 Specific Encoding: 0000 0001 0000 1001 0101 0000 0010 0110
+	 */				//	   0	1	 0	  9	   5	0	 2    6
+	// SET MEMORY FOR INSTRUCTIONS
+	//instruction = 0x01095026; // //xor $10, $8, $9
+	instruction = 0x26500901;
+	memadd = 4;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 10, &got));
+	}
+	passed = (err == mips_Success) && (got == 0xF000F0FF);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+//XORI  |  Bitwise exclusive or immediate           | 2
+	//0011 10ss ssst tttt iiii iiii iiii iiii
+
+	testId = mips_test_begin_test("xori");
+	err = mips_cpu_set_register(cpu, 1, 0x00001012);
+
+	instruction = 0x02002238;
+	memadd = 0;
+	if (err == 0) {
+		err = mips_mem_write(mem, memadd, 4, (uint8_t*) &instruction);
+	}
+	if (err == 0) {
+		err = mips_cpu_set_pc(cpu, memadd);
+
+	}
+	if (err == 0) {
+		err = mips_cpu_step(cpu);
+		//Implements the function
+	}
+	if (err == 0) {
+		err = (mips_error) (err | mips_cpu_get_register(cpu, 2, &got));
+	}	//Backwards
+	passed = (err == mips_Success) && (got == 0x00001010);
+	mips_test_end_test(testId, passed, NULL);
+	err = mips_cpu_reset(cpu);
+	err = mips_Success;
+
 	mips_test_end_suite();
-    
-    return 0;
+	mips_cpu_free(cpu);
+	mips_mem_free(mem);
+
+	return 0;
 }

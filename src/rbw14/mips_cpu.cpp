@@ -157,6 +157,17 @@ mips_error mips_cpu_set_debug_level(mips_cpu_h state, unsigned level, FILE *dest
     return mips_Success;
 }
 
+mips_error advancepc(mips_cpu_h state, uint32_t offset) {
+	mips_error e;
+	e = mips_cpu_set_pc(state,state->pcNext);
+	if ((offset & 0x80000000) != 0) {
+		state->pcNext = state->pcNext - (~offset + 1);
+	} else {
+		state->pcNext += offset;	
+	}
+
+	return e;
+}
 mips_cpu_h mips_cpu_create(mips_mem_h mem)
 {
     mips_cpu_impl *cpu=new mips_cpu_impl;
@@ -383,13 +394,14 @@ uint32_t _lbu(instruction inst, mips_cpu_h state, mips_error& e) {
 	
 	uint32_t res = (uint32_t(buffer[0]));
 	if(state->logLevel >= 2){
-		fprintf(state->logDst, "%s : va = %i , vb = %i ,address = %i, res = %x", __func__, va, vb, address, res);
+		fprintf(state->logDst, "%s : va = %i , vb = %i ,address = %i, res = %x\n", __func__, va, vb, address, res);
 	}
 
 	e = mips_cpu_set_register(state,inst.src2,res);
 		
 	return 4;
 }
+
 
 uint32_t _lw(instruction inst, mips_cpu_h state, mips_error& e) {
 
@@ -626,15 +638,22 @@ uint32_t _sllv(instruction inst, mips_cpu_h state) {
 	return 4;
 }
 
-uint32_t beq(instruction inst, mips_cpu_h state) {
+uint32_t _beq(instruction inst, mips_cpu_h state) {
 	if(state->logLevel >= 2){
 		fprintf(state->logDst, "%s : %u, %u, %u.\n", __func__, inst.src1, inst.src2, inst.idata);
 	}
 	uint32_t va = state->regs[inst.src1];
 	uint32_t vb = state->regs[inst.src2];
-	uint32_t retval = 4;
+	uint32_t retval;
+	uint32_t retval_sign;
 	if (va == vb) {
-		retval = inst.idata << 2;
+		retval_sign = retval & 0x8000;
+		if (retval_sign != 0) {
+			retval = retval | 0xFFFF0000;
+		}
+		retval = (retval << 2);
+	} else {
+		retval = 4;
 	}
 	if(state->logLevel >= 2){
 		fprintf(state->logDst, "pc offset = %x\n", retval);
@@ -731,10 +750,10 @@ mips_error mips_cpu_step(
 			offset = _lui(inst,state);
 		} else if (inst.opcode == 0x2B) {
 			offset = _sw(inst,state,err);
-		}else if (inst.opcode == 0x24) {
+		} else if (inst.opcode == 0x24) {
 			offset = _lbu(inst,state,err);
-		} if (inst.opcode == 0x04) {
-			//cout << "BEQ" << endl;
+		} else if (inst.opcode == 0x04) {
+			offset = _beq(inst,state);
 		} 
 		
 	}
@@ -744,12 +763,12 @@ mips_error mips_cpu_step(
 	state->regs[0] = 0;
 	
 	
-	state->pc = state->pcNext;
-	state->pcNext += offset;
+
+	advancepc(state,offset);
 
 	
 	if(state->logLevel >= 3) {
-            fprintf(state->logDst, "pcNext = %x\n", state-> pcNext);
+            fprintf(state->logDst, "pcNext = %x\n", state->pcNext);
     }
 	return mips_Success;
 }
